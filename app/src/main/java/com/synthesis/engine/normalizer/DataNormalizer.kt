@@ -11,6 +11,7 @@ import javax.inject.Singleton
 class DataNormalizer @Inject constructor() {
 
     data class NormalizedRecord(
+        val id: String,
         val entity: String,
         val timestamp: Long,
         val location: GeoLocation?,
@@ -22,12 +23,21 @@ class DataNormalizer @Inject constructor() {
     )
 
     fun normalize(observation: Observation): NormalizedRecord {
+        val origUnit = standardizeUnit(observation.measurement.unit)
+        // Standardize measurements: Convert °F to °C for consistent thermodynamic comparison
+        val (normVal, normUnit) = when (origUnit) {
+            "°F" -> ((observation.measurement.value - 32.0) * 5.0 / 9.0) to "°C"
+            "hPa", "millibar", "mb" -> (observation.measurement.value / 10.0) to "kPa"
+            else -> observation.measurement.value to origUnit
+        }
+
         return NormalizedRecord(
+            id = observation.id,
             entity = observation.entity,
             timestamp = observation.timestamp,
             location = observation.location,
-            measurement = observation.measurement.value,
-            unit = standardizeUnit(observation.measurement.unit),
+            measurement = normVal,
+            unit = normUnit,
             uncertainty = observation.uncertainty,
             source = observation.sourceName,
             observationType = observation.observationType

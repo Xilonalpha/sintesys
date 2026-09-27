@@ -248,8 +248,8 @@ class InvestigationViewModel @Inject constructor(
             }
             _progress.value = 0.86f
 
-            // Save observations
-            allObservations.forEach { repository.saveObservation(it) }
+            // Save observations in batch
+            repository.saveObservations(allObservations)
             _logs.value = _logs.value + "Total observations: ${allObservations.size}"
 
             // Anomaly Detection

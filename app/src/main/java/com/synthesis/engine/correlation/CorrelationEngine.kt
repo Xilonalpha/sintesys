@@ -5,48 +5,35 @@ import com.synthesis.engine.normalizer.DataNormalizer
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
+import kotlin.math.pow
 
 @Singleton
 class CorrelationEngine @Inject constructor(
     private val normalizer: DataNormalizer
 ) {
 
-    data class CorrelationResult(
-        val sourceA: String,
-        val sourceB: String,
-        val correlationType: CorrelationType,
-        val strength: Float,
-        val description: String,
-        val domains: List<String>
-    )
-
     fun findCorrelations(observations: List<Observation>): List<Correlation> {
-        if (observations.size < 4) return emptyList()
+        return correlate(observations, "")
+    }
 
+    fun correlate(observations: List<Observation>, investigationId: String): List<Correlation> {
         val correlations = mutableListOf<Correlation>()
-        val investigationId = observations.firstOrNull()?.investigationId ?: ""
-
-        // Group by source
         val groupedBySource = observations.groupBy { it.sourceId }
-        val sourceKeys = groupedBySource.keys.toList()
+        val sources = groupedBySource.keys.toList()
 
-        // Cross-source correlation analysis
-        for (i in sourceKeys.indices) {
-            for (j in i + 1 until sourceKeys.size) {
-                val sourceA = sourceKeys[i]
-                val sourceB = sourceKeys[j]
-                val obsA = groupedBySource[sourceA] ?: continue
-                val obsB = groupedBySource[sourceB] ?: continue
+        for (i in sources.indices) {
+            for (j in i + 1 until sources.size) {
+                val sourceA = sources[i]
+                val sourceB = sources[j]
+                val obsA = groupedBySource[sourceA] ?: emptyList()
+                val obsB = groupedBySource[sourceB] ?: emptyList()
 
                 val nameA = obsA.firstOrNull()?.sourceName ?: sourceA
                 val nameB = obsB.firstOrNull()?.sourceName ?: sourceB
                 val domainA = obsA.firstOrNull()?.observationType?.name ?: ""
                 val domainB = obsB.firstOrNull()?.observationType?.name ?: ""
 
-                // Skip if same domain and no spatial/temporal overlap possible
-                if (domainA == domainB && domainA == ObservationType.HISTORICAL.name) continue
-
-                // Temporal correlation
+                // Temporal correlation: do events cluster in time?
                 val temporalStrength = calculateTemporalCorrelation(obsA, obsB)
                 if (temporalStrength > 0.2f) {
                     correlations.add(Correlation(
@@ -76,7 +63,7 @@ class CorrelationEngine @Inject constructor(
                     ))
                 }
 
-                // Statistical correlation (for numeric measurements)
+                // Statistical correlation (for numeric measurements, time-aligned)
                 val statStrength = calculateStatisticalCorrelation(obsA, obsB)
                 if (statStrength > 0.3f) {
                     correlations.add(Correlation(
@@ -85,7 +72,7 @@ class CorrelationEngine @Inject constructor(
                         sourceA = nameA, sourceB = nameB,
                         correlationType = CorrelationType.STATISTICAL,
                         strength = statStrength,
-                        description = "Statistical relationship detected between $nameA and $nameB. Correlation detected — causality not established. Cross-domain measurement alignment suggests potential common underlying factor.",
+                        description = "Statistical relationship detected between $nameA and $nameB ($domainA vs $domainB, Pearson r=${String.format("%.2f", statStrength)}). Co-variation detected — causality requires discriminant testing.",
                         causalityEstablished = false,
                         domains = listOf(domainA, domainB).filter { it.isNotBlank() }
                     ))
@@ -138,14 +125,24 @@ class CorrelationEngine @Inject constructor(
     }
 
     private fun calculateStatisticalCorrelation(obsA: List<Observation>, obsB: List<Observation>): Float {
-        val valuesA = obsA.map { it.measurement.value }.filter { it != 0.0 }
-        val valuesB = obsB.map { it.measurement.value }.filter { it != 0.0 }
-        if (valuesA.size < 2 || valuesB.size < 2) return 0f
+        // Pair observations by temporal proximity within a 3-day window
+        val timeWindowMs = 86400000L * 3
+        val paired = mutableListOf<Pair<Double, Double>>()
+        obsA.filter { it.measurement.value != 0.0 }.forEach { a ->
+            val closestB = obsB.filter { it.measurement.value != 0.0 }.minByOrNull { abs(it.timestamp - a.timestamp) }
+            if (closestB != null && abs(closestB.timestamp - a.timestamp) <= timeWindowMs) {
+                paired.add(a.measurement.value to closestB.measurement.value)
+            }
+        }
+        if (paired.size < 3) return 0f
+
+        val valuesA = paired.map { it.first }
+        val valuesB = paired.map { it.second }
         val meanA = valuesA.average()
         val meanB = valuesB.average()
-        val numerator = valuesA.zip(valuesB).sumOf { (a, b) -> (a - meanA) * (b - meanB) }.toDouble()
-        val denomA = kotlin.math.sqrt(valuesA.sumOf { (it - meanA) * (it - meanA) }.toDouble())
-        val denomB = kotlin.math.sqrt(valuesB.sumOf { (it - meanB) * (it - meanB) }.toDouble())
+        val numerator = paired.sumOf { (a, b) -> (a - meanA) * (b - meanB) }
+        val denomA = kotlin.math.sqrt(valuesA.sumOf { (it - meanA).pow(2) })
+        val denomB = kotlin.math.sqrt(valuesB.sumOf { (it - meanB).pow(2) })
         return if (denomA > 0 && denomB > 0) abs(numerator / (denomA * denomB)).toFloat().coerceIn(0f, 1f) else 0f
     }
 
@@ -159,32 +156,32 @@ class CorrelationEngine @Inject constructor(
 
         for (i in domainKeys.indices) {
             for (j in i + 1 until domainKeys.size) {
-                val typeA = domainKeys[i]
-                val typeB = domainKeys[j]
-                val obsA = groupedByDomain[typeA] ?: continue
-                val obsB = groupedByDomain[typeB] ?: continue
+                val domainA = domainKeys[i]
+                val domainB = domainKeys[j]
+                val listA = groupedByDomain[domainA] ?: emptyList()
+                val listB = groupedByDomain[domainB] ?: emptyList()
 
-                // Check for temporal coincidence of anomalies across domains
-                var coincident = 0
-                val window = 86400000L * 7 // 7 days
-                obsA.forEach { a ->
-                    obsB.forEach { b ->
-                        if (abs(a.timestamp - b.timestamp) < window) coincident++
+                // Check for temporal clustering of anomalies across domains
+                val windowMs = 86400000L * 2 // 48-hour window
+                var crossDomainEvents = 0
+                listA.forEach { a ->
+                    listB.forEach { b ->
+                        if (abs(a.timestamp - b.timestamp) < windowMs) crossDomainEvents++
                     }
                 }
-                if (coincident > 0) {
-                    val strength = (coincident.toFloat() / (obsA.size * obsB.size).toFloat()).coerceIn(0.1f, 0.9f)
-                    val nameA = obsA.firstOrNull()?.sourceName ?: typeA.name
-                    val nameB = obsB.firstOrNull()?.sourceName ?: typeB.name
+
+                if (crossDomainEvents > 0) {
+                    val strength = (crossDomainEvents.toFloat() / (listA.size + listB.size)).coerceIn(0.1f, 1.0f)
                     correlations.add(Correlation(
-                        id = "corr_anomaly_${typeA}_${typeB}_${System.currentTimeMillis()}",
+                        id = "corr_anomaly_${domainA.name}_${domainB.name}_${System.currentTimeMillis()}",
                         investigationId = investigationId,
-                        sourceA = nameA, sourceB = nameB,
-                        correlationType = CorrelationType.CAUSAL,
+                        sourceA = listA.firstOrNull()?.sourceName ?: domainA.name,
+                        sourceB = listB.firstOrNull()?.sourceName ?: domainB.name,
+                        correlationType = CorrelationType.STATISTICAL,
                         strength = strength,
-                        description = "Cross-domain anomaly coincidence detected: ${obsA.size} anomalous events in $nameA temporally overlap with ${obsB.size} anomalous events in $nameB within a 7-day window. Suggest investigation into shared drivers.",
+                        description = "Simultaneous anomalous events detected across ${domainA.name} and ${domainB.name}. Co-occurring within 48h. Possible shared underlying driver.",
                         causalityEstablished = false,
-                        domains = listOf(typeA.name, typeB.name)
+                        domains = listOf(domainA.name, domainB.name)
                     ))
                 }
             }
@@ -193,20 +190,12 @@ class CorrelationEngine @Inject constructor(
     }
 
     private fun buildTemporalDescription(nameA: String, nameB: String, strength: Float, obsA: List<Observation>, obsB: List<Observation>): String {
-        val timeA = obsA.firstOrNull()?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(it.timestamp)) } ?: "unknown"
-        val timeB = obsB.firstOrNull()?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(it.timestamp)) } ?: "unknown"
-        return "Temporal pattern detected between $nameA and $nameB. Events from both sources cluster within a 3-day window (strength: ${(strength * 100).toInt()}%). " +
-                "Sample timestamps: $nameA at $timeA, $nameB at $timeB. " +
-                "Correlation detected — causality not established."
+        val pct = (strength * 100).toInt()
+        return "$pct% of observations between $nameA and $nameB occurred within 72 hours of each other. Temporal clustering detected. Causality not established."
     }
 
     private fun buildSpatialDescription(nameA: String, nameB: String, strength: Float, obsA: List<Observation>, obsB: List<Observation>): String {
-        val locA = obsA.firstOrNull { it.location != null }?.location
-        val locB = obsB.firstOrNull { it.location != null }?.location
-        val dist = if (locA != null && locB != null) normalizer.calculateDistance(locA, locB) else null
-        return "Spatial proximity detected between observations from $nameA and $nameB. " +
-                (dist?.let { "Distance between representative points: ${String.format("%.1f", it)} km. " } ?: "") +
-                "${(strength * 100).toInt()}% of observations fall within 500 km radius. " +
-                "Correlation detected — causality not established."
+        val pct = (strength * 100).toInt()
+        return "$pct% of geolocated events between $nameA and $nameB occurred within 500 km. Spatial proximity detected."
     }
 }

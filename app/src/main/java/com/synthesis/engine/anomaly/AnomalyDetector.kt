@@ -26,11 +26,13 @@ class AnomalyDetector @Inject constructor(
         if (observations.size < 3) return emptyList()
 
         val normalized = normalizer.normalizeBatch(observations)
-        val groupedByType = normalized.groupBy { it.observationType }
+        // Group by observationType AND physical unit so we don't mix temperatures with wind speeds or pressures
+        val groupedByMetric = normalized.groupBy { Pair(it.observationType, it.unit) }
 
         val anomalies = mutableListOf<Anomaly>()
 
-        groupedByType.forEach { (type, records) ->
+        groupedByMetric.forEach { (typeUnitPair, records) ->
+            val (type, unit) = typeUnitPair
             if (records.size < 3) return@forEach
 
             val values = records.map { it.measurement }
@@ -47,9 +49,9 @@ class AnomalyDetector @Inject constructor(
 
                     anomalies.add(
                         Anomaly(
-                            id = "anomaly_${type}_${index}",
+                            id = "anomaly_${type}_${unit}_${index}_${System.currentTimeMillis()}",
                             investigationId = observations.firstOrNull()?.investigationId ?: "",
-                            observationId = observations.getOrNull(index)?.id ?: "",
+                            observationId = record.id,
                             expectedValue = mean,
                             observedValue = record.measurement,
                             deviation = deviation,

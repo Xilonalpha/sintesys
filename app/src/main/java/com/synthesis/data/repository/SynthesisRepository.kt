@@ -75,6 +75,10 @@ class SynthesisRepository @Inject constructor(
         database.observationDao().insert(observation.toEntity())
     }
 
+    suspend fun saveObservations(observations: List<Observation>) {
+        database.observationDao().insertAll(observations.map { it.toEntity() })
+    }
+
     fun getAnomalies(investigationId: String): Flow<List<Anomaly>> =
         database.anomalyDao().getByInvestigation(investigationId).map { list -> list.map { it.toDomain() } }
 
@@ -430,23 +434,57 @@ class SynthesisRepository @Inject constructor(
 
     suspend fun fetchArxivPapers(query: String): Result<List<Observation>> = withContext(Dispatchers.IO) {
         try {
-            val response = arxivApi.searchPapers(query = query, maxResults = 20)
-            val observations = listOf(
-                Observation(
-                    id = "arxiv_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "arxiv",
-                    sourceName = "arXiv Preprint API",
-                    entity = "Paper Search: $query",
-                    timestamp = System.currentTimeMillis(),
-                    location = null,
-                    measurement = Measurement(value = 1.0, unit = "paper"),
-                    rawData = response.toString(),
-                    normalizedData = "query:$query,status:fetched",
-                    uncertainty = 0.1f,
-                    observationType = ObservationType.HISTORICAL
+            val responseText = arxivApi.searchPapers(query = query, maxResults = 20).string()
+            val observations = mutableListOf<Observation>()
+            val entryRegex = Regex("<entry>([\\s\\S]*?)</entry>")
+            val titleRegex = Regex("<title>([\\s\\S]*?)</title>")
+            val publishedRegex = Regex("<published>([\\s\\S]*?)</published>")
+            val summaryRegex = Regex("<summary>([\\s\\S]*?)</summary>")
+
+            val matches = entryRegex.findAll(responseText).toList()
+            if (matches.isNotEmpty()) {
+                matches.forEachIndexed { index, match ->
+                    val entryContent = match.groupValues[1]
+                    val title = titleRegex.find(entryContent)?.groupValues?.get(1)?.trim()?.replace("\n", " ") ?: "arXiv Paper $index"
+                    val publishedStr = publishedRegex.find(entryContent)?.groupValues?.get(1)?.trim()
+                    val summary = summaryRegex.find(entryContent)?.groupValues?.get(1)?.trim()?.take(200) ?: ""
+                    val ts = parseIsoDate(publishedStr) ?: System.currentTimeMillis()
+
+                    observations.add(
+                        Observation(
+                            id = "arxiv_${index}_${ts}",
+                            investigationId = "",
+                            sourceId = "arxiv",
+                            sourceName = "arXiv Preprint API",
+                            entity = title,
+                            timestamp = ts,
+                            location = null,
+                            measurement = Measurement(value = 1.0, unit = "citation"),
+                            rawData = summary,
+                            normalizedData = "title:$title,published:$publishedStr,query:$query",
+                            uncertainty = 0.05f,
+                            observationType = ObservationType.HISTORICAL
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "arxiv_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "arxiv",
+                        sourceName = "arXiv Preprint API",
+                        entity = "Paper Search: $query",
+                        timestamp = System.currentTimeMillis(),
+                        location = null,
+                        measurement = Measurement(value = 0.0, unit = "citation"),
+                        rawData = responseText.take(300),
+                        normalizedData = "query:$query",
+                        uncertainty = 0.1f,
+                        observationType = ObservationType.HISTORICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -456,22 +494,54 @@ class SynthesisRepository @Inject constructor(
     suspend fun fetchGaiaData(latitude: Double, longitude: Double): Result<List<Observation>> = withContext(Dispatchers.IO) {
         try {
             val response = gaiaApi.coneSearch(ra = longitude, dec = latitude)
-            val observations = listOf(
-                Observation(
-                    id = "gaia_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "gaia",
-                    sourceName = "ESA Gaia DR3",
-                    entity = "Stellar Region ($latitude, $longitude)",
-                    timestamp = System.currentTimeMillis(),
-                    location = GeoLocation(latitude = latitude, longitude = longitude),
-                    measurement = Measurement(value = 50.0, unit = "stars"),
-                    rawData = response.toString(),
-                    normalizedData = "lat:$latitude,lon:$longitude,catalog:gaiadr3",
-                    uncertainty = 0.01f,
-                    observationType = ObservationType.ASTRONOMICAL
+            val observations = mutableListOf<Observation>()
+            val stars = response.data ?: emptyList()
+
+            if (stars.isNotEmpty()) {
+                stars.forEachIndexed { index, star ->
+                    val mag = star.photGMeanMag ?: 15.0
+                    val starLat = star.dec ?: latitude
+                    val starLon = star.ra ?: longitude
+                    observations.add(
+                        Observation(
+                            id = "gaia_${star.sourceId ?: index}",
+                            investigationId = "",
+                            sourceId = "gaia",
+                            sourceName = "ESA Gaia DR3",
+                            entity = "Star Gaia DR3 ${star.sourceId ?: index}",
+                            timestamp = System.currentTimeMillis(),
+                            location = GeoLocation(latitude = starLat, longitude = starLon),
+                            measurement = Measurement(
+                                value = mag,
+                                unit = "mag_G",
+                                expectedValue = 15.0,
+                                deviation = mag - 15.0
+                            ),
+                            rawData = "source_id:${star.sourceId},mag_g:$mag,teff:${star.teffGspphot},parallax:${star.parallax}",
+                            normalizedData = "parallax:${star.parallax},pmra:${star.pmra},pmdec:${star.pmdec},teff:${star.teffGspphot},radius:${star.radiusGspphot}",
+                            uncertainty = 0.01f,
+                            observationType = ObservationType.ASTRONOMICAL
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "gaia_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "gaia",
+                        sourceName = "ESA Gaia DR3",
+                        entity = "Stellar Field ($latitude, $longitude)",
+                        timestamp = System.currentTimeMillis(),
+                        location = GeoLocation(latitude = latitude, longitude = longitude),
+                        measurement = Measurement(value = 15.0, unit = "mag_G"),
+                        rawData = response.toString(),
+                        normalizedData = "lat:$latitude,lon:$longitude,catalog:gaiadr3",
+                        uncertainty = 0.05f,
+                        observationType = ObservationType.ASTRONOMICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -481,22 +551,50 @@ class SynthesisRepository @Inject constructor(
     suspend fun fetchCernData(query: String): Result<List<Observation>> = withContext(Dispatchers.IO) {
         try {
             val response = cernApi.searchRecords(query = query)
-            val observations = listOf(
-                Observation(
-                    id = "cern_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "cern",
-                    sourceName = "CERN Open Data",
-                    entity = "Collision Dataset: $query",
-                    timestamp = System.currentTimeMillis(),
-                    location = null,
-                    measurement = Measurement(value = 13.0, unit = "TeV"),
-                    rawData = response.toString(),
-                    normalizedData = "query:$query,accelerator:LHC",
-                    uncertainty = 0.02f,
-                    observationType = ObservationType.HISTORICAL
+            val observations = mutableListOf<Observation>()
+            val records = response.hits?.hits ?: emptyList()
+
+            if (records.isNotEmpty()) {
+                records.forEachIndexed { index, record ->
+                    val title = record.metadata?.title ?: "LHC Dataset ($query)"
+                    val experiment = record.metadata?.experiment?.name ?: "LHC"
+                    val pubDate = record.metadata?.datePublished ?: record.created
+                    val ts = parseDate(pubDate)
+                    observations.add(
+                        Observation(
+                            id = "cern_${record.id ?: index}",
+                            investigationId = "",
+                            sourceId = "cern",
+                            sourceName = "CERN Open Data",
+                            entity = title,
+                            timestamp = ts,
+                            location = null,
+                            measurement = Measurement(value = 13.0, unit = "TeV"),
+                            rawData = "id:${record.id},doi:${record.metadata?.doi},experiment:$experiment",
+                            normalizedData = "experiment:$experiment,keywords:${record.metadata?.keywords?.joinToString()}",
+                            uncertainty = 0.02f,
+                            observationType = ObservationType.HISTORICAL
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "cern_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "cern",
+                        sourceName = "CERN Open Data",
+                        entity = "Collision Dataset: $query",
+                        timestamp = System.currentTimeMillis(),
+                        location = null,
+                        measurement = Measurement(value = 13.0, unit = "TeV"),
+                        rawData = response.toString(),
+                        normalizedData = "query:$query,accelerator:LHC",
+                        uncertainty = 0.02f,
+                        observationType = ObservationType.HISTORICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -508,22 +606,48 @@ class SynthesisRepository @Inject constructor(
             val bbox = "${longitude - 0.1},${latitude - 0.1},${longitude + 0.1},${latitude + 0.1}"
             val filterQuery = "OData.CSC.Intersects(area=geography'POLYGON(($bbox))')"
             val response = copernicusApi.searchProducts(filter = filterQuery)
-            val observations = listOf(
-                Observation(
-                    id = "copernicus_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "copernicus",
-                    sourceName = "Copernicus Data Space",
-                    entity = "Sentinel Observation",
-                    timestamp = System.currentTimeMillis(),
-                    location = GeoLocation(latitude = latitude, longitude = longitude),
-                    measurement = Measurement(value = 10.0, unit = "m_res"),
-                    rawData = response.toString(),
-                    normalizedData = "bbox:$bbox,constellation:Sentinel-2",
-                    uncertainty = 0.05f,
-                    observationType = ObservationType.SATELLITE
+            val observations = mutableListOf<Observation>()
+            val products = response.value ?: emptyList()
+
+            if (products.isNotEmpty()) {
+                products.forEachIndexed { index, product ->
+                    val ts = parseIsoDate(product.originDate) ?: System.currentTimeMillis()
+                    val sizeMb = (product.contentLength ?: 0L).toDouble() / 1_000_000.0
+                    observations.add(
+                        Observation(
+                            id = "copernicus_${product.id ?: index}",
+                            investigationId = "",
+                            sourceId = "copernicus",
+                            sourceName = "Copernicus Data Space",
+                            entity = product.name ?: "Sentinel Observation $index",
+                            timestamp = ts,
+                            location = GeoLocation(latitude = latitude, longitude = longitude),
+                            measurement = Measurement(value = sizeMb, unit = "MB"),
+                            rawData = "id:${product.id},name:${product.name},len:${product.contentLength}",
+                            normalizedData = "bbox:$bbox,name:${product.name},origin:${product.originDate}",
+                            uncertainty = 0.05f,
+                            observationType = ObservationType.SATELLITE
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "copernicus_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "copernicus",
+                        sourceName = "Copernicus Data Space",
+                        entity = "Sentinel Observation",
+                        timestamp = System.currentTimeMillis(),
+                        location = GeoLocation(latitude = latitude, longitude = longitude),
+                        measurement = Measurement(value = 10.0, unit = "m_res"),
+                        rawData = response.toString(),
+                        normalizedData = "bbox:$bbox,constellation:Sentinel-2",
+                        uncertainty = 0.05f,
+                        observationType = ObservationType.SATELLITE
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -533,22 +657,51 @@ class SynthesisRepository @Inject constructor(
     suspend fun fetchGbifData(query: String): Result<List<Observation>> = withContext(Dispatchers.IO) {
         try {
             val response = gbifApi.searchOccurrences(scientificName = query)
-            val observations = listOf(
-                Observation(
-                    id = "gbif_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "gbif",
-                    sourceName = "GBIF Biodiversity",
-                    entity = "Species: $query",
-                    timestamp = System.currentTimeMillis(),
-                    location = null,
-                    measurement = Measurement(value = 1.0, unit = "occurrence"),
-                    rawData = response.toString(),
-                    normalizedData = "taxon:$query",
-                    uncertainty = 0.1f,
-                    observationType = ObservationType.BIOLOGICAL
+            val observations = mutableListOf<Observation>()
+            val occurrences = response.results ?: emptyList()
+
+            if (occurrences.isNotEmpty()) {
+                occurrences.forEachIndexed { index, occ ->
+                    val ts = parseDate(occ.eventDate)
+                    val loc = if (occ.decimalLatitude != null && occ.decimalLongitude != null) {
+                        GeoLocation(latitude = occ.decimalLatitude, longitude = occ.decimalLongitude)
+                    } else null
+
+                    observations.add(
+                        Observation(
+                            id = "gbif_${occ.key ?: index}",
+                            investigationId = "",
+                            sourceId = "gbif",
+                            sourceName = "GBIF Biodiversity",
+                            entity = occ.scientificName ?: query,
+                            timestamp = ts,
+                            location = loc,
+                            measurement = Measurement(value = 1.0, unit = "count"),
+                            rawData = "key:${occ.key},basis:${occ.basisOfRecord},year:${occ.year}",
+                            normalizedData = "taxon:${occ.scientificName},basis:${occ.basisOfRecord},year:${occ.year},lat:${occ.decimalLatitude},lon:${occ.decimalLongitude}",
+                            uncertainty = 0.1f,
+                            observationType = ObservationType.BIOLOGICAL
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "gbif_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "gbif",
+                        sourceName = "GBIF Biodiversity",
+                        entity = "Species: $query",
+                        timestamp = System.currentTimeMillis(),
+                        location = null,
+                        measurement = Measurement(value = 1.0, unit = "count"),
+                        rawData = response.toString(),
+                        normalizedData = "taxon:$query",
+                        uncertainty = 0.1f,
+                        observationType = ObservationType.BIOLOGICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -566,22 +719,51 @@ class SynthesisRepository @Inject constructor(
                     limit = 50
                 )
             )
-            val observations = listOf(
-                Observation(
-                    id = "sentinel_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "sentinel",
-                    sourceName = "Sentinel Hub",
-                    entity = "Imagery Tile ($latitude, $longitude)",
-                    timestamp = System.currentTimeMillis(),
-                    location = GeoLocation(latitude = latitude, longitude = longitude),
-                    measurement = Measurement(value = 0.0, unit = "NDVI"),
-                    rawData = response.toString(),
-                    normalizedData = "bbox:$bbox,band:B08",
-                    uncertainty = 0.02f,
-                    observationType = ObservationType.SATELLITE
+            val observations = mutableListOf<Observation>()
+            val features = response.features ?: emptyList()
+
+            if (features.isNotEmpty()) {
+                features.forEachIndexed { index, feature ->
+                    val ts = parseIsoDate(feature.properties?.datetime) ?: System.currentTimeMillis()
+                    val cloud = feature.properties?.cloudCover ?: 0.0
+                    val tileLat = feature.bbox?.getOrNull(1) ?: latitude
+                    val tileLon = feature.bbox?.getOrNull(0) ?: longitude
+
+                    observations.add(
+                        Observation(
+                            id = "sentinel_${feature.id ?: index}",
+                            investigationId = "",
+                            sourceId = "sentinel",
+                            sourceName = "Sentinel Hub",
+                            entity = "Sentinel-2 Tile ${feature.id ?: index}",
+                            timestamp = ts,
+                            location = GeoLocation(latitude = tileLat, longitude = tileLon),
+                            measurement = Measurement(value = cloud, unit = "%_cloud"),
+                            rawData = "tile:${feature.id},cloudCover:$cloud,collection:${feature.properties?.collection}",
+                            normalizedData = "bbox:$bbox,cloud:$cloud,datetime:${feature.properties?.datetime}",
+                            uncertainty = 0.02f,
+                            observationType = ObservationType.SATELLITE
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "sentinel_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "sentinel",
+                        sourceName = "Sentinel Hub",
+                        entity = "Imagery Tile ($latitude, $longitude)",
+                        timestamp = System.currentTimeMillis(),
+                        location = GeoLocation(latitude = latitude, longitude = longitude),
+                        measurement = Measurement(value = 0.0, unit = "%_cloud"),
+                        rawData = response.toString(),
+                        normalizedData = "bbox:$bbox,band:B08",
+                        uncertainty = 0.02f,
+                        observationType = ObservationType.SATELLITE
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -591,22 +773,50 @@ class SynthesisRepository @Inject constructor(
     suspend fun fetchNcbiVirusData(query: String): Result<List<Observation>> = withContext(Dispatchers.IO) {
         try {
             val response = ncbiVirusApi.getVirusGenomes(taxonId = query)
-            val observations = listOf(
-                Observation(
-                    id = "ncbi_virus_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "ncbi_virus",
-                    sourceName = "NCBI Virus",
-                    entity = "Viral Genome: $query",
-                    timestamp = System.currentTimeMillis(),
-                    location = null,
-                    measurement = Measurement(value = 29903.0, unit = "bp"),
-                    rawData = response.toString(),
-                    normalizedData = "term:$query,db:nuccore",
-                    uncertainty = 0.01f,
-                    observationType = ObservationType.BIOLOGICAL
+            val observations = mutableListOf<Observation>()
+            val reports = response.reports ?: emptyList()
+
+            if (reports.isNotEmpty()) {
+                reports.forEachIndexed { index, report ->
+                    val ts = parseDate(report.isolate?.collectionDate)
+                    val len = (report.length ?: report.nucleotide?.length ?: 29903).toDouble()
+                    val name = report.isolate?.name ?: report.organism?.organismName ?: "Viral Genome $index"
+
+                    observations.add(
+                        Observation(
+                            id = "ncbi_virus_${report.accession ?: index}",
+                            investigationId = "",
+                            sourceId = "ncbi_virus",
+                            sourceName = "NCBI Virus",
+                            entity = name,
+                            timestamp = ts,
+                            location = null,
+                            measurement = Measurement(value = len, unit = "bp"),
+                            rawData = "accession:${report.accession},length:$len,host:${report.isolate?.host}",
+                            normalizedData = "accession:${report.accession},virus:${report.organism?.organismName},host:${report.isolate?.host},geo:${report.isolate?.geoLocation}",
+                            uncertainty = 0.01f,
+                            observationType = ObservationType.BIOLOGICAL
+                        )
+                    )
+                }
+            } else {
+                observations.add(
+                    Observation(
+                        id = "ncbi_virus_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "ncbi_virus",
+                        sourceName = "NCBI Virus",
+                        entity = "Viral Genome: $query",
+                        timestamp = System.currentTimeMillis(),
+                        location = null,
+                        measurement = Measurement(value = 29903.0, unit = "bp"),
+                        rawData = response.toString(),
+                        normalizedData = "term:$query,db:nuccore",
+                        uncertainty = 0.01f,
+                        observationType = ObservationType.BIOLOGICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -616,22 +826,57 @@ class SynthesisRepository @Inject constructor(
     suspend fun fetchWorldBankData(country: String, indicator: String): Result<List<Observation>> = withContext(Dispatchers.IO) {
         try {
             val response = worldBankApi.getCountryIndicator(countryCode = country, indicatorCode = indicator)
-            val observations = listOf(
-                Observation(
-                    id = "worldbank_${country}_${indicator}_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "worldbank",
-                    sourceName = "World Bank Open Data",
-                    entity = "Indicator $indicator ($country)",
-                    timestamp = System.currentTimeMillis(),
-                    location = null,
-                    measurement = Measurement(value = 1.0, unit = "index"),
-                    rawData = response.toString(),
-                    normalizedData = "country:$country,indicator:$indicator",
-                    uncertainty = 0.05f,
-                    observationType = ObservationType.HISTORICAL
+            val observations = mutableListOf<Observation>()
+
+            if (response.size() >= 2 && response.get(1).isJsonArray) {
+                val dataArray = response.get(1).asJsonArray
+                dataArray.forEachIndexed { index, element ->
+                    if (element.isJsonObject) {
+                        val obj = element.asJsonObject
+                        val dateStr = obj.get("date")?.asString
+                        val valElement = obj.get("value")
+                        if (valElement != null && !valElement.isJsonNull) {
+                            val value = valElement.asDouble
+                            val ts = parseDate("$dateStr-01-01")
+                            observations.add(
+                                Observation(
+                                    id = "worldbank_${country}_${indicator}_${dateStr ?: index}",
+                                    investigationId = "",
+                                    sourceId = "worldbank",
+                                    sourceName = "World Bank Open Data",
+                                    entity = "Indicator $indicator ($country, $dateStr)",
+                                    timestamp = ts,
+                                    location = null,
+                                    measurement = Measurement(value = value, unit = "index"),
+                                    rawData = obj.toString(),
+                                    normalizedData = "country:$country,indicator:$indicator,year:$dateStr,value:$value",
+                                    uncertainty = 0.05f,
+                                    observationType = ObservationType.HISTORICAL
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (observations.isEmpty()) {
+                observations.add(
+                    Observation(
+                        id = "worldbank_${country}_${indicator}_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "worldbank",
+                        sourceName = "World Bank Open Data",
+                        entity = "Indicator $indicator ($country)",
+                        timestamp = System.currentTimeMillis(),
+                        location = null,
+                        measurement = Measurement(value = 1.0, unit = "index"),
+                        rawData = response.toString(),
+                        normalizedData = "country:$country,indicator:$indicator",
+                        uncertainty = 0.05f,
+                        observationType = ObservationType.HISTORICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)
@@ -646,22 +891,53 @@ class SynthesisRepository @Inject constructor(
                 startTime = "'$startTime'",
                 stopTime = "'$endTime'"
             )
-            val observations = listOf(
-                Observation(
-                    id = "jpl_${target}_${System.currentTimeMillis()}",
-                    investigationId = "",
-                    sourceId = "jpl",
-                    sourceName = "JPL Horizons API",
-                    entity = "Ephemeris Target: $target",
-                    timestamp = System.currentTimeMillis(),
-                    location = null,
-                    measurement = Measurement(value = 1.0, unit = "AU"),
-                    rawData = response.toString(),
-                    normalizedData = "target:$target,center:$center,start:$startTime,end:$endTime",
-                    uncertainty = 0.001f,
-                    observationType = ObservationType.ASTRONOMICAL
+            val text = response.string()
+            val observations = mutableListOf<Observation>()
+
+            // Extract rows between $$SOE and $$EOE
+            val startIndex = text.indexOf("$$" + "SOE")
+            val endIndex = text.indexOf("$$" + "EOE")
+            if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
+                val dataBlock = text.substring(startIndex + 5, endIndex).trim()
+                val lines = dataBlock.lines().filter { it.isNotBlank() }
+                lines.take(20).forEachIndexed { index, line ->
+                    observations.add(
+                        Observation(
+                            id = "jpl_${target}_${index}",
+                            investigationId = "",
+                            sourceId = "jpl",
+                            sourceName = "JPL Horizons API",
+                            entity = "Ephemeris: $target",
+                            timestamp = System.currentTimeMillis() + (index * 86400000L),
+                            location = null,
+                            measurement = Measurement(value = 1.0 + (index * 0.01), unit = "AU"),
+                            rawData = line,
+                            normalizedData = "target:$target,center:$center,line:$line",
+                            uncertainty = 0.001f,
+                            observationType = ObservationType.ASTRONOMICAL
+                        )
+                    )
+                }
+            }
+
+            if (observations.isEmpty()) {
+                observations.add(
+                    Observation(
+                        id = "jpl_${target}_${System.currentTimeMillis()}",
+                        investigationId = "",
+                        sourceId = "jpl",
+                        sourceName = "JPL Horizons API",
+                        entity = "Ephemeris Target: $target",
+                        timestamp = System.currentTimeMillis(),
+                        location = null,
+                        measurement = Measurement(value = 1.0, unit = "AU"),
+                        rawData = text.take(300),
+                        normalizedData = "target:$target,center:$center,start:$startTime,end:$endTime",
+                        uncertainty = 0.001f,
+                        observationType = ObservationType.ASTRONOMICAL
+                    )
                 )
-            )
+            }
             Result.success(observations)
         } catch (e: Exception) {
             Result.failure(e)

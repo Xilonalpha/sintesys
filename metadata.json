@@ -1,0 +1,6 @@
+{
+  "name": "SYNTHESIS",
+  "description": "Scientific discovery and cross-domain data synthesis platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
