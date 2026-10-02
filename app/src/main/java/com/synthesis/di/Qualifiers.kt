@@ -18,3 +18,5 @@ import javax.inject.Qualifier
 @Qualifier @Retention(AnnotationRetention.BINARY) annotation class WorldBankRetrofit
 @Qualifier @Retention(AnnotationRetention.BINARY) annotation class JplHorizonsRetrofit
 @Qualifier @Retention(AnnotationRetention.BINARY) annotation class ExoplanetArchiveRetrofit
+@Qualifier @Retention(AnnotationRetention.BINARY) annotation class MastExoRetrofit
+@Qualifier @Retention(AnnotationRetention.BINARY) annotation class MastPortalRetrofit

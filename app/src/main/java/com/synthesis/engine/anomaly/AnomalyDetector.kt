@@ -31,21 +31,28 @@ class AnomalyDetector @Inject constructor(
 
         val anomalies = mutableListOf<Anomaly>()
 
-        groupedByMetric.forEach { (typeUnitPair, records) ->
+        groupedByMetric.forEach { (typeUnitPair, rawRecords) ->
             val (type, unit) = typeUnitPair
+            // Filter out missing-data sentinel values common in NASA/NOAA/meteorological feeds (-999, -9999, etc.)
+            val records = rawRecords.filter { !it.measurement.isNaN() && !it.measurement.isInfinite() && it.measurement > -900.0 }
             if (records.size < 3) return@forEach
 
             val values = records.map { it.measurement }
             val mean = values.average()
             val stdDev = calculateStdDev(values, mean)
 
+            val seenObservations = mutableSetOf<String>()
             records.forEachIndexed { index, record ->
+                if (!seenObservations.add(record.id)) return@forEachIndexed
                 val zScore = if (stdDev > 0) abs(record.measurement - mean) / stdDev else 0.0
                 val score = (zScore / 3.0).coerceIn(0.0, 1.0).toFloat()
 
                 if (score > 0.5f) {
                     val deviation = record.measurement - mean
-                    val deviationPercent = if (mean != 0.0) (deviation / mean) * 100 else 0.0
+                    val deviationPercent = when (unit) {
+                        "°C" -> (deviation / (mean + 273.15)) * 100.0 // Thermodynamic ratio in Kelvin
+                        else -> if (abs(mean) > 1e-6) (deviation / mean) * 100.0 else 0.0
+                    }
 
                     anomalies.add(
                         Anomaly(
@@ -74,8 +81,10 @@ class AnomalyDetector @Inject constructor(
     }
 
     private fun calculateStdDev(values: List<Double>, mean: Double): Double {
-        val variance = values.map { (it - mean).pow(2) }.average()
-        return kotlin.math.sqrt(variance)
+        if (values.size <= 1) return 0.0
+        val sumSquared = values.sumOf { (it - mean).pow(2) }
+        val sampleVariance = sumSquared / (values.size - 1) // Unbiased sample variance (Bessel's correction N-1)
+        return kotlin.math.sqrt(sampleVariance)
     }
 
     private fun generatePossibleCauses(score: Float, type: ObservationType): List<PossibleCause> {

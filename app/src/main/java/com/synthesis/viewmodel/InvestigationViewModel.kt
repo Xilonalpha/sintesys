@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.synthesis.data.repository.SourceOrchestrator
 import com.synthesis.data.repository.SynthesisRepository
+import com.synthesis.data.service.gemini.GeminiAstrophysicsService
 import com.synthesis.domain.model.*
 import com.synthesis.engine.anomaly.AnomalyDetector
 import com.synthesis.engine.correlation.CorrelationEngine
@@ -27,7 +28,8 @@ class InvestigationViewModel @Inject constructor(
     private val correlationEngine: CorrelationEngine,
     private val hypothesisEngine: HypothesisEngine,
     private val impactIpEngine: ImpactIpEngine,
-    private val discoveryEngine: DiscoveryEngine
+    private val discoveryEngine: DiscoveryEngine,
+    private val geminiService: GeminiAstrophysicsService
 ) : ViewModel() {
 
     private val investigationId: String = checkNotNull(savedStateHandle["investigationId"])
@@ -268,7 +270,14 @@ class InvestigationViewModel @Inject constructor(
 
             // Hypotheses
             _progress.value = 0.95f
-            val generatedHypotheses = hypothesisEngine.generateHypotheses(allObservations, detectedAnomalies, detectedCorrelations)
+            _logs.value = _logs.value + "Synthesizing scientific hypotheses..."
+            val aiHypotheses = geminiService.generateScientificHypotheses(query, allObservations, detectedAnomalies)
+            val generatedHypotheses = if (aiHypotheses.isNotEmpty()) {
+                _logs.value = _logs.value + "Gemini AI generated ${aiHypotheses.size} physical hypotheses!"
+                aiHypotheses
+            } else {
+                hypothesisEngine.generateHypotheses(allObservations, detectedAnomalies, detectedCorrelations)
+            }
             generatedHypotheses.forEach { repository.saveHypothesis(it) }
             _logs.value = _logs.value + "Hypotheses: ${generatedHypotheses.size}"
 

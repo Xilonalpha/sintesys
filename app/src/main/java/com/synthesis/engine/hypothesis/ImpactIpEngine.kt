@@ -126,7 +126,7 @@ class ImpactIpEngine @Inject constructor(
             domains.size >= 4 && (topAnomaly?.anomalyScore ?: 0f) > 0.8f ->
                 "Multi-domain Anomaly: Convergent Evidence Across ${domains.size} Scientific Fields"
             domains.contains(ObservationType.ASTRONOMICAL.name) && domains.contains(ObservationType.GEOLOGICAL.name) ->
-                "Astro-Geophysical Correlation: Potential Causal Link Detected"
+                "Astro-Geophysical Observation Pattern: Cross-Domain Co-occurrence Requiring Empirical Verification"
             domains.contains(ObservationType.BIOLOGICAL.name) && domains.contains(ObservationType.ATMOSPHERIC.name) ->
                 "Bio-Climatic Pattern: Environmental Driver of Biological Anomaly"
             (topAnomaly?.anomalyScore ?: 0f) > 0.9f ->
@@ -192,9 +192,10 @@ class ImpactIpEngine @Inject constructor(
         val hasMethodInnovation = observations.map { it.sourceId }.distinct().size >= 3
         val hasUtility = correlations.any { it.strength > 0.6f && it.correlationType == CorrelationType.CAUSAL }
 
-        val novelty = (noveltyScore * 0.6f + if (hasNovelMeasurement) 0.2f else 0f + if (hasMethodInnovation) 0.2f else 0f).coerceIn(0f, 1f)
-        val utility = (if (hasUtility) 0.7f else 0.3f + correlations.size / 10f).coerceIn(0f, 1f)
-        val nonObviousness = (novelty * 0.5f + utility * 0.3f + if (hasMethodInnovation) 0.2f else 0f).coerceIn(0f, 1f)
+        val noveltyBonus = (if (hasNovelMeasurement) 0.2f else 0f) + (if (hasMethodInnovation) 0.2f else 0f)
+        val novelty = (noveltyScore * 0.6f + noveltyBonus).coerceIn(0f, 1f)
+        val utility = ((if (hasUtility) 0.7f else 0.3f) + (correlations.size / 10f)).coerceIn(0f, 1f)
+        val nonObviousness = (novelty * 0.5f + utility * 0.3f + (if (hasMethodInnovation) 0.2f else 0f)).coerceIn(0f, 1f)
 
         val patentClass = when {
             observations.any { it.observationType == ObservationType.BIOLOGICAL } -> "C12N (Microorganisms/Enzymes)"

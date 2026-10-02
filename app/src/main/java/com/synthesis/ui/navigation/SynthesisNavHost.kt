@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.synthesis.ui.screens.*
+import com.synthesis.ui.screens.xilon.XilonDiscoveryScreen
 
 @Composable
 fun SynthesisNavHost(
@@ -18,7 +19,10 @@ fun SynthesisNavHost(
             HomeScreen(
                 onInvestigationClick = { id -> navController.navigate("investigation/$id") },
                 onNewInvestigation = { navController.navigate("new_investigation") },
-                onViewExoplanets = { navController.navigate("exoplanets") }
+                onViewExoplanets = { navController.navigate("exoplanets") },
+                onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
+                onViewDeepHunt = { navController.navigate("deep_hunt") },
+                onViewAdvancedLab = { navController.navigate("advanced_lab") }
             )
         }
         composable("new_investigation") {
@@ -81,6 +85,30 @@ fun SynthesisNavHost(
         }
         composable("exoplanets") {
             ExoplanetScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onViewDashboard = { navController.navigate("exoplanet_dashboard") },
+                onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
+                onViewDeepHunt = { navController.navigate("deep_hunt") },
+                onViewAdvancedLab = { navController.navigate("advanced_lab") }
+            )
+        }
+        composable("exoplanet_dashboard") {
+            ExoplanetDashboardScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("xilon_discovery") {
+            XilonDiscoveryScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("deep_hunt") {
+            DeepHuntScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("advanced_lab") {
+            AdvancedDiscoveryScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

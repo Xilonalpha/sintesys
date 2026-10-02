@@ -1,4 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SYNTHESIS</string>
+    <string name="tagline">Astrophysical Exoplanet Discovery &amp; Field Laboratory</string>
+
+    <!-- Navigation & Common -->
+    <string name="nav_home">Home</string>
+    <string name="nav_investigations">Investigations</string>
+    <string name="nav_discoveries">Discoveries</string>
+    <string name="nav_anomalies">Anomalies</string>
+    <string name="nav_advanced">Advanced Lab</string>
+    <string name="nav_deep_hunt">Deep Hunt</string>
+
+    <!-- Advanced Lab Tabs -->
+    <string name="tab_biosignatures">Astrobiology &amp; Technosignatures</string>
+    <string name="tab_gaia_rescue">Rescue False Positives (Gaia De-Blender)</string>
+    <string name="tab_harmonic_stitcher">Multi-Sector Harmonic Stitcher</string>
+    <string name="tab_climate_simulator">1D Climate Simulator</string>
+    <string name="tab_sky_radar">Live Sky Radar &amp; Countdowns</string>
+    <string name="tab_telescope_goto">Telescope Physical GoTo &amp; Motors</string>
+    <string name="tab_live_photometry">Live Photometry &amp; Official Report</string>
+
+    <!-- Photometry & Reports -->
+    <string name="btn_import_real_data">IMPORT REAL DATA</string>
+    <string name="btn_observer_settings">OBSERVER SETTINGS</string>
+    <string name="btn_export_etd">ETD PROTOCOL (CAS)</string>
+    <string name="btn_export_aavso">AAVSO EXTENDED FORMAT</string>
+    <string name="lbl_transit_depth">Transit Depth (δ)</string>
+    <string name="lbl_planetary_radius">Planetary Radius</string>
+    <string name="lbl_snr">Signal-to-Noise Ratio</string>
+
+    <!-- Billing & Paywall -->
+    <string name="paywall_title">SYNTHESIS PRO OBSERVATORY LICENSE</string>
+    <string name="paywall_subtitle">Your 60-minute full research trial has ended. Subscribe to unlock unconstrained scientific computing and hardware control.</string>
+    <string name="plan_monthly_title">Monthly Access Plan</string>
+    <string name="plan_monthly_price">9.99 € / month</string>
+    <string name="plan_yearly_title">Annual Observatory License</string>
+    <string name="plan_yearly_price">75.00 € / year (-37% discount)</string>
+    <string name="btn_subscribe">SUBSCRIBE WITH GOOGLE PLAY</string>
+    <string name="btn_restore_purchases">RESTORE PURCHASES</string>
+
+    <!-- Hardware Telescope Mount -->
+    <string name="mount_connected">Mount Connected</string>
+    <string name="mount_disconnected">Mount Disconnected</string>
+    <string name="btn_emergency_stop">EMERGENCY STOP (:Q#)</string>
+    <string name="btn_park_mount">PARK MOUNT (HOME)</string>
+    <string name="lbl_tracking">Sidereal Tracking</string>
 </resources>

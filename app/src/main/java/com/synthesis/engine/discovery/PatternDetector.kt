@@ -122,7 +122,7 @@ class PatternDetector @Inject constructor(
         return patterns
     }
 
-    // 3. Corelații statistice neașteptate între măsurători din domenii diferite
+    // 3. Corelații statistice reale între măsurători din domenii diferite (aliniate temporal în ferestre de 24h)
     private fun detectCrossDomainCorrelations(observations: List<Observation>): List<DetectedPattern> {
         val patterns = mutableListOf<DetectedPattern>()
         val byType = observations.groupBy { it.observationType }
@@ -132,20 +132,33 @@ class PatternDetector @Inject constructor(
             for (j in i + 1 until types.size) {
                 val typeA = types[i]
                 val typeB = types[j]
-                val valuesA = byType[typeA]?.map { it.measurement.value }?.filter { it != 0.0 } ?: continue
-                val valuesB = byType[typeB]?.map { it.measurement.value }?.filter { it != 0.0 } ?: continue
-                if (valuesA.size < 3 || valuesB.size < 3) continue
+                val obsA = byType[typeA]?.filter { it.measurement.value != 0.0 } ?: continue
+                val obsB = byType[typeB]?.filter { it.measurement.value != 0.0 } ?: continue
+                if (obsA.size < 3 || obsB.size < 3) continue
 
-                val corr = pearsonCorrelation(valuesA, valuesB)
+                // Rigorous temporal binning: Align observations into common 24-hour time bins
+                // to prevent invalid pairing of unaligned array indices across different timestamps
+                val binSizeMs = 86400000L
+                val binsA = obsA.groupBy { it.timestamp / binSizeMs }
+                val binsB = obsB.groupBy { it.timestamp / binSizeMs }
+                val commonBins = binsA.keys.intersect(binsB.keys).sorted()
+
+                if (commonBins.size < 3) continue
+
+                val pairedValuesA = commonBins.map { bin -> binsA[bin]!!.map { it.measurement.value }.average() }
+                val pairedValuesB = commonBins.map { bin -> binsB[bin]!!.map { it.measurement.value }.average() }
+
+                val corr = pearsonCorrelation(pairedValuesA, pairedValuesB)
                 if (abs(corr) > 0.6f) {
-                    val direction = if (corr > 0) "positive" else "negative"
+                    val direction = if (corr > 0) "positive co-variation" else "inverse relationship (anti-correlation)"
                     patterns.add(DetectedPattern(
                         patternType = PatternType.STATISTICAL_OUTLIER,
-                        description = "Strong $direction correlation (r=${String.format("%.3f", corr)}) detected between ${typeA.name} and ${typeB.name} measurements. " +
-                                "This cross-domain statistical relationship is not documented in standard scientific literature and may represent a novel physical connection or feedback mechanism.",
+                        description = "Time-aligned correlation ($direction, Pearson r=${String.format("%.3f", corr)}, N=${commonBins.size} synchronous 24h bins) detected between ${typeA.name} and ${typeB.name} measurements. " +
+                                "This cross-domain statistical relationship indicates systematic co-evolution requiring empirical physical modeling.",
                         significance = abs(corr),
-                        involvedObservations = (byType[typeA]!! + byType[typeB]!!).map { it.id },
-                        involvedSources = (byType[typeA]!! + byType[typeB]!!).map { it.sourceName }.distinct(),
+                        involvedObservations = (obsA.filter { it.timestamp / binSizeMs in commonBins } +
+                                obsB.filter { it.timestamp / binSizeMs in commonBins }).map { it.id },
+                        involvedSources = (obsA + obsB).map { it.sourceName }.distinct(),
                         domains = listOf(typeA.name, typeB.name)
                     ))
                 }
@@ -157,7 +170,7 @@ class PatternDetector @Inject constructor(
     // 4. Violări de prag (multiple surse raportează valori peste prag în aceeași zonă/timp)
     private fun detectThresholdViolations(observations: List<Observation>): List<DetectedPattern> {
         val patterns = mutableListOf<DetectedPattern>()
-        val anomalous = observations.filter { it.measurement.deviation != null && abs(it.measurement.deviation!!) > 20 }
+        val anomalous = observations.filter { isSignificantDeviation(it, 0.15) }
         if (anomalous.size < 3) return patterns
 
         val byTimeWindow = anomalous.groupBy { it.timestamp / 86400000L } // per day
@@ -168,7 +181,7 @@ class PatternDetector @Inject constructor(
                 patterns.add(DetectedPattern(
                     patternType = PatternType.THRESHOLD_VIOLATION,
                     description = "Synchronized threshold violation: ${obs.size} anomalous measurements from ${sources.size} independent sources on day ${day}. " +
-                            "Domains: ${types.joinToString()}. Deviations exceed 20% from expected values simultaneously. " +
+                            "Domains: ${types.joinToString()}. Deviations exceed physical thresholds from expected baselines simultaneously. " +
                             "This coordinated anomaly pattern strongly suggests either a large-scale physical event or a systematic measurement bias requiring immediate investigation.",
                     significance = (obs.size / 8f).coerceIn(0.3f, 1f),
                     involvedObservations = obs.map { it.id },
@@ -223,18 +236,18 @@ class PatternDetector @Inject constructor(
         val chainLength = 3
         val window = 864000000L // 10 zile
 
-        for (i in 0 until sorted.size - chainLength) {
+        for (i in 0 .. (sorted.size - chainLength)) {
             val a = sorted[i]
             val b = sorted[i + 1]
             val c = sorted[i + 2]
             if (a.observationType != b.observationType && b.observationType != c.observationType && a.observationType != c.observationType &&
                 c.timestamp - a.timestamp < window &&
-                listOf(a, b, c).all { it.measurement.deviation != null && abs(it.measurement.deviation!!) > 10 }
+                listOf(a, b, c).all { isSignificantDeviation(it, 0.10) }
             ) {
                 patterns.add(DetectedPattern(
                     patternType = PatternType.CAUSAL_CHAIN,
                     description = "Emergent causal chain detected across 3 domains: ${a.observationType.name} → ${b.observationType.name} → ${c.observationType.name}. " +
-                            "Each step shows significant deviation (>10%) within ${((c.timestamp - a.timestamp) / 86400000L)} days. " +
+                            "Each step shows significant domain deviation within ${((c.timestamp - a.timestamp) / 86400000L)} days. " +
                             "This sequential multi-domain anomaly pattern is an emergent property not visible in any single dataset. It suggests a propagating physical effect with potential predictive value.",
                     significance = 0.85f,
                     involvedObservations = listOf(a.id, b.id, c.id),
@@ -244,6 +257,30 @@ class PatternDetector @Inject constructor(
             }
         }
         return patterns
+    }
+
+    private fun isSignificantDeviation(obs: Observation, thresholdPct: Double): Boolean {
+        val dev = obs.measurement.deviation ?: return false
+        val expected = obs.measurement.expectedValue
+        val unit = obs.measurement.unit.lowercase()
+
+        // Earthquake Magnitude (Mw) is logarithmic: 0.8 Mw represents ~16x energy jump
+        if (unit == "mw" || unit == "magnitude") {
+            return abs(dev) >= 0.8
+        }
+        // Barometric pressure (kPa): 1.5 kPa drop indicates cyclonic storm front
+        if (unit == "kpa") {
+            return abs(dev) >= 1.5
+        }
+        // Atmospheric / Oceanic Temperature (°C): 3°C deviation from climatological mean
+        if (unit == "°c" || unit == "c") {
+            return abs(dev) >= 3.0
+        }
+        // Relative percentage deviation if baseline is known
+        if (expected != null && abs(expected) > 1e-4) {
+            return (abs(dev) / abs(expected)) >= thresholdPct
+        }
+        return abs(dev) >= (thresholdPct * 100.0)
     }
 
     private fun pearsonCorrelation(x: List<Double>, y: List<Double>): Float {
@@ -271,12 +308,16 @@ class PatternDetector @Inject constructor(
         val meanX = indices.average()
         val meanY = values.average()
         var num = 0.0
-        var den = 0.0
+        var denX = 0.0
+        var denY = 0.0
         for (i in 0 until n) {
             val dx = indices[i] - meanX
-            num += dx * (values[i] - meanY)
-            den += dx * dx
+            val dy = values[i] - meanY
+            num += dx * dy
+            denX += dx * dx
+            denY += dy * dy
         }
-        return if (den > 0) (num / den).toFloat().coerceIn(-1f, 1f) else 0f
+        // Pearson correlation r(t, y) represents scale-invariant trend strength and direction in [-1, +1]
+        return if (denX > 0 && denY > 0) (num / sqrt(denX * denY)).toFloat().coerceIn(-1f, 1f) else 0f
     }
 }

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SYNTHESIS</string>
+    <string name="tagline">Laborator Astrofizic și Descoperire de Exoplanete</string>
+
+    <!-- Navigare & Comun -->
+    <string name="nav_home">Acasă</string>
+    <string name="nav_investigations">Investigații</string>
+    <string name="nav_discoveries">Descoperiri</string>
+    <string name="nav_anomalies">Anomalii</string>
+    <string name="nav_advanced">Laborator Avansat</string>
+    <string name="nav_deep_hunt">Căutare Avansată</string>
+
+    <!-- Tab-uri Laborator Avansat -->
+    <string name="tab_biosignatures">Astrobiologie și Tehnosemnături</string>
+    <string name="tab_gaia_rescue">Salvare Fals Pozitive (Gaia De-Blender)</string>
+    <string name="tab_harmonic_stitcher">Stitcher Multi-Sector TESS</string>
+    <string name="tab_climate_simulator">Simulator Climatic 1D</string>
+    <string name="tab_sky_radar">Radar Live pe Cer și Numărătoare Inversă</string>
+    <string name="tab_telescope_goto">Control Fizic Montură și Motoare GoTo</string>
+    <string name="tab_live_photometry">Fotometrie Live și Raport Oficial</string>
+
+    <!-- Fotometrie și Rapoarte -->
+    <string name="btn_import_real_data">ÎNCARCĂ DATE REALE</string>
+    <string name="btn_observer_settings">SETĂRI OBSERVATOR</string>
+    <string name="btn_export_etd">RAPORT ETD (CAS)</string>
+    <string name="btn_export_aavso">FORMAT AAVSO EXTINS</string>
+    <string name="lbl_transit_depth">Adâncime Tranzit (δ)</string>
+    <string name="lbl_planetary_radius">Rază Planetară</string>
+    <string name="lbl_snr">Raport Semnal-Zgomot (SNR)</string>
+
+    <!-- Abonamente & Paywall -->
+    <string name="paywall_title">LICENȚĂ SYNTHESIS PRO OBSERVATOR</string>
+    <string name="paywall_subtitle">Perioada de 60 de minute gratuite de cercetare s-a încheiat. Abonează-te pentru a debloca puterea de calcul completă și controlul hardware al telescopului.</string>
+    <string name="plan_monthly_title">Abonament Lunar</string>
+    <string name="plan_monthly_price">9.99 € / lună</string>
+    <string name="plan_yearly_title">Abonament Anual Observator</string>
+    <string name="plan_yearly_price">75.00 € / an (-37% reducere)</string>
+    <string name="btn_subscribe">ABONEAZĂ-TE PRIN GOOGLE PLAY</string>
+    <string name="btn_restore_purchases">RESTAUREAZĂ ACHIZIȚIILE</string>
+
+    <!-- Hardware Montură Telescop -->
+    <string name="mount_connected">Montură Conectată</string>
+    <string name="mount_disconnected">Montură Deconectată</string>
+    <string name="btn_emergency_stop">OPRIRE DE URGENȚĂ (:Q#)</string>
+    <string name="btn_park_mount">PARCARE MONTURĂ (HOME)</string>
+    <string name="lbl_tracking">Urmărire Siderală</string>
+</resources>

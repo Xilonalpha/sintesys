@@ -63,16 +63,17 @@ class CorrelationEngine @Inject constructor(
                     ))
                 }
 
-                // Statistical correlation (for numeric measurements, time-aligned)
-                val statStrength = calculateStatisticalCorrelation(obsA, obsB)
-                if (statStrength > 0.3f) {
+                // Statistical correlation (for numeric measurements, time-aligned with signed Pearson r and Student's t test)
+                val stat = calculateStatisticalCorrelation(obsA, obsB)
+                if (abs(stat.r) > 0.3f) {
+                    val relationType = if (stat.r > 0) "Direct co-variation" else "Inverse relationship (anti-correlation)"
                     correlations.add(Correlation(
                         id = "corr_stat_${sourceA}_${sourceB}_${System.currentTimeMillis()}",
                         investigationId = investigationId,
                         sourceA = nameA, sourceB = nameB,
                         correlationType = CorrelationType.STATISTICAL,
-                        strength = statStrength,
-                        description = "Statistical relationship detected between $nameA and $nameB ($domainA vs $domainB, Pearson r=${String.format("%.2f", statStrength)}). Co-variation detected — causality requires discriminant testing.",
+                        strength = abs(stat.r),
+                        description = "Statistical relationship detected between $nameA and $nameB ($domainA vs $domainB, Pearson r=${String.format("%.2f", stat.r)}, t=${String.format("%.2f", stat.t)}, df=${stat.df}, ${stat.pString}). $relationType confirmed across time-aligned data.",
                         causalityEstablished = false,
                         domains = listOf(domainA, domainB).filter { it.isNotBlank() }
                     ))
@@ -81,7 +82,7 @@ class CorrelationEngine @Inject constructor(
         }
 
         // Multi-source anomaly correlation: find if anomalies in one domain coincide with events in another
-        val anomalyObs = observations.filter { it.measurement.deviation != null && abs(it.measurement.deviation!!) > 10 }
+        val anomalyObs = observations.filter { isSignificantDeviation(it, 0.10) }
         if (anomalyObs.size >= 2) {
             val crossDomainAnomalies = findCrossDomainAnomalyCorrelations(anomalyObs, investigationId)
             correlations.addAll(crossDomainAnomalies)
@@ -124,17 +125,46 @@ class CorrelationEngine @Inject constructor(
         return if (maxPossible > 0) (matches.toFloat() / maxPossible.toFloat()).coerceIn(0f, 1f) else 0f
     }
 
-    private fun calculateStatisticalCorrelation(obsA: List<Observation>, obsB: List<Observation>): Float {
-        // Pair observations by temporal proximity within a 3-day window
+    data class StatisticalResult(
+        val r: Float,
+        val n: Int,
+        val df: Int,
+        val t: Double,
+        val pString: String
+    )
+
+    private fun calculateStatisticalCorrelation(obsA: List<Observation>, obsB: List<Observation>): StatisticalResult {
+        // Bin into 24-hour intervals to ensure true temporal synchronicity between independent time series
+        val binSizeMs = 86400000L
+        val binsA = obsA.filter { it.measurement.value != 0.0 }.groupBy { it.timestamp / binSizeMs }
+        val binsB = obsB.filter { it.measurement.value != 0.0 }.groupBy { it.timestamp / binSizeMs }
+        val commonBins = binsA.keys.intersect(binsB.keys).sorted()
+
+        if (commonBins.size >= 3) {
+            val valuesA = commonBins.map { bin -> binsA[bin]!!.map { it.measurement.value }.average() }
+            val valuesB = commonBins.map { bin -> binsB[bin]!!.map { it.measurement.value }.average() }
+            val meanA = valuesA.average()
+            val meanB = valuesB.average()
+            val numerator = valuesA.indices.sumOf { (valuesA[it] - meanA) * (valuesB[it] - meanB) }
+            val denomA = kotlin.math.sqrt(valuesA.sumOf { (it - meanA).pow(2) })
+            val denomB = kotlin.math.sqrt(valuesB.sumOf { (it - meanB).pow(2) })
+            val r = if (denomA > 0 && denomB > 0) (numerator / (denomA * denomB)).toFloat().coerceIn(-1f, 1f) else 0f
+            return buildStatisticalResult(r, commonBins.size)
+        }
+
+        // Fallback for sparse discrete events: 1-to-1 nearest neighbor matching without replacement
         val timeWindowMs = 86400000L * 3
+        val usedB = mutableSetOf<String>()
         val paired = mutableListOf<Pair<Double, Double>>()
-        obsA.filter { it.measurement.value != 0.0 }.forEach { a ->
-            val closestB = obsB.filter { it.measurement.value != 0.0 }.minByOrNull { abs(it.timestamp - a.timestamp) }
-            if (closestB != null && abs(closestB.timestamp - a.timestamp) <= timeWindowMs) {
-                paired.add(a.measurement.value to closestB.measurement.value)
+        obsA.filter { it.measurement.value != 0.0 }.sortedBy { it.timestamp }.forEach { a ->
+            val matchB = obsB.filter { it.measurement.value != 0.0 && it.id !in usedB && abs(it.timestamp - a.timestamp) <= timeWindowMs }
+                .minByOrNull { abs(it.timestamp - a.timestamp) }
+            if (matchB != null) {
+                usedB.add(matchB.id)
+                paired.add(a.measurement.value to matchB.measurement.value)
             }
         }
-        if (paired.size < 3) return 0f
+        if (paired.size < 3) return StatisticalResult(0f, 0, 0, 0.0, "insufficient data")
 
         val valuesA = paired.map { it.first }
         val valuesB = paired.map { it.second }
@@ -143,7 +173,34 @@ class CorrelationEngine @Inject constructor(
         val numerator = paired.sumOf { (a, b) -> (a - meanA) * (b - meanB) }
         val denomA = kotlin.math.sqrt(valuesA.sumOf { (it - meanA).pow(2) })
         val denomB = kotlin.math.sqrt(valuesB.sumOf { (it - meanB).pow(2) })
-        return if (denomA > 0 && denomB > 0) abs(numerator / (denomA * denomB)).toFloat().coerceIn(0f, 1f) else 0f
+        val r = if (denomA > 0 && denomB > 0) (numerator / (denomA * denomB)).toFloat().coerceIn(-1f, 1f) else 0f
+        return buildStatisticalResult(r, paired.size)
+    }
+
+    private fun buildStatisticalResult(r: Float, n: Int): StatisticalResult {
+        val df = (n - 2).coerceAtLeast(1)
+        val rDouble = r.toDouble().coerceIn(-0.9999, 0.9999)
+        val t = rDouble * kotlin.math.sqrt(df.toDouble() / (1.0 - rDouble * rDouble))
+        val absT = abs(t)
+        val pLabel = when {
+            absT >= 4.5 -> "p < 0.001 (Extremely Significant)"
+            absT >= 3.0 -> "p < 0.01 (Highly Significant)"
+            absT >= 2.1 -> "p < 0.05 (Statistically Significant)"
+            else -> "p >= 0.05 (Advisory / Sub-threshold)"
+        }
+        return StatisticalResult(r, n, df, t, pLabel)
+    }
+
+    private fun isSignificantDeviation(obs: Observation, thresholdPct: Double): Boolean {
+        val dev = obs.measurement.deviation ?: return false
+        val expected = obs.measurement.expectedValue
+        val unit = obs.measurement.unit.lowercase()
+
+        if (unit == "mw" || unit == "magnitude") return abs(dev) >= 0.8
+        if (unit == "kpa") return abs(dev) >= 1.5
+        if (unit == "°c" || unit == "c") return abs(dev) >= 3.0
+        if (expected != null && abs(expected) > 1e-4) return (abs(dev) / abs(expected)) >= thresholdPct
+        return abs(dev) >= (thresholdPct * 100.0)
     }
 
     private fun findCrossDomainAnomalyCorrelations(

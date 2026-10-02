@@ -23,16 +23,25 @@ object AppModule {
 
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): SynthesisDatabase {
-        return Room.databaseBuilder(context, SynthesisDatabase::class.java, "synthesis_database").build()
+        return Room.databaseBuilder(context, SynthesisDatabase::class.java, "synthesis_database")
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
+    fun provideXilonDiscoveryDao(database: SynthesisDatabase): com.synthesis.data.local.dao.XilonDiscoveryDao =
+        database.xilonDiscoveryDao()
+
+    @Provides @Singleton
+    fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+        val cacheSize = 50L * 1024 * 1024 // 50 MB HTTP Cache
+        val cache = okhttp3.Cache(java.io.File(context.cacheDir, "http_cache"), cacheSize)
         return OkHttpClient.Builder()
+            .cache(cache)
             .addInterceptor(logging)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(35, TimeUnit.SECONDS)
+            .readTimeout(35, TimeUnit.SECONDS)
             .build()
     }
 
@@ -131,4 +140,16 @@ object AppModule {
     fun provideExoplanetArchiveRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl("https://exoplanetarchive.ipac.caltech.edu/").client(client).addConverterFactory(GsonConverterFactory.create()).build()
     @Provides @Singleton fun provideExoplanetArchiveApi(@ExoplanetArchiveRetrofit retrofit: Retrofit): ExoplanetArchiveApi = retrofit.create(ExoplanetArchiveApi::class.java)
+
+    // STScI MAST Exo Data Validation API (exo.mast.stsci.edu)
+    @Provides @Singleton @MastExoRetrofit
+    fun provideMastExoRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl("https://exo.mast.stsci.edu/").client(client).addConverterFactory(GsonConverterFactory.create()).build()
+    @Provides @Singleton fun provideMastExoApi(@MastExoRetrofit retrofit: Retrofit): MastExoApi = retrofit.create(MastExoApi::class.java)
+
+    // STScI MAST Portal Catalog API (mast.stsci.edu)
+    @Provides @Singleton @MastPortalRetrofit
+    fun provideMastPortalRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl("https://mast.stsci.edu/").client(client).addConverterFactory(GsonConverterFactory.create()).build()
+    @Provides @Singleton fun provideMastPortalApi(@MastPortalRetrofit retrofit: Retrofit): MastPortalApi = retrofit.create(MastPortalApi::class.java)
 }

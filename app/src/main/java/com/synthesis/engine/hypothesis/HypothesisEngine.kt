@@ -61,7 +61,11 @@ class HypothesisEngine @Inject constructor() {
 
         // Hypothesis B: Previously unclassified phenomenon
         val unclassEvidence = anomalies.size + correlations.filter { it.strength > 0.7f }.size
-        val unclassContradictions = if (observations.size > anomalies.size) observations.size - anomalies.size else 0
+        // Baseline control observations are scaled logarithmically so large catalog volumes don't artificially crush confidence to 0%
+        val nonAnomalousCount = (observations.size - anomalies.size).coerceAtLeast(0)
+        val unclassContradictions = if (nonAnomalousCount > 0) {
+            (kotlin.math.ln(1.0 + nonAnomalousCount) * 2.5).toInt().coerceAtMost(nonAnomalousCount)
+        } else 0
         val unclassConfidence = if (unclassEvidence + unclassContradictions > 0) {
             (unclassEvidence.toFloat() / (unclassEvidence + unclassContradictions).toFloat()) * 100
         } else 0f

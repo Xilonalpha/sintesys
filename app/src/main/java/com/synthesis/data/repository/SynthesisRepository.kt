@@ -7,9 +7,8 @@ import com.synthesis.data.local.mapper.*
 import com.synthesis.data.remote.api.*
 import com.synthesis.engine.exoplanet.ExoplanetCandidateFinder
 import com.synthesis.domain.model.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
@@ -314,6 +313,8 @@ class SynthesisRepository @Inject constructor(
 
                 params.forEach { (paramName, dateValues) ->
                     dateValues.entries.toList().takeLast(30).forEach { (dateStr, value) ->
+                        // NASA POWER sentinel fill value for missing/uncalibrated data is -999 or <= -900
+                        if (value <= -900.0 || value.isNaN()) return@forEach
                         val unit = when (paramName) {
                             "T2M" -> "°C"
                             "PS" -> "kPa"
@@ -427,6 +428,59 @@ class SynthesisRepository @Inject constructor(
                 )
             )
             Result.success(candidates)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchKeplerCandidates(): Result<List<ExoplanetCandidate>> = withContext(Dispatchers.IO) {
+        try {
+            val candidates = exoplanetCandidateFinder.rankKeplerCandidates(
+                exoplanetArchiveApi.queryKeplerTable(
+                    adqlQuery = """SELECT kepid,kepoi_name,kepler_name,koi_disposition,koi_pdisposition,koi_score,koi_period,koi_duration,koi_depth,koi_prad,koi_insol,koi_teq,koi_steff,koi_srad,koi_kepmag FROM cumulative WHERE koi_pdisposition IN ('CANDIDATE')"""
+                )
+            )
+            Result.success(candidates)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchK2Candidates(): Result<List<ExoplanetCandidate>> = withContext(Dispatchers.IO) {
+        try {
+            val candidates = exoplanetCandidateFinder.rankK2Candidates(
+                exoplanetArchiveApi.queryK2Table(
+                    adqlQuery = """SELECT epic_name,epic_candname,k2c_disp,pl_orbper,pl_trandur,pl_trandep,pl_rade,pl_insol,pl_eqt,st_teff,st_rad,st_optmag FROM k2candidates WHERE k2c_disp IN ('CANDIDATE')"""
+                )
+            )
+            Result.success(candidates)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchConfirmedExoplanets(): Result<List<ExoplanetCandidate>> = withContext(Dispatchers.IO) {
+        try {
+            val planets = exoplanetCandidateFinder.transformConfirmedPlanets(
+                exoplanetArchiveApi.queryConfirmedTable(
+                    adqlQuery = """SELECT pl_name,hostname,discoverymethod,disc_year,disc_facility,pl_orbper,pl_rade,pl_bmasse,pl_eqt,pl_insol,sy_dist,sy_vmag,st_teff,st_rad FROM pscomppars WHERE pl_rade IS NOT NULL"""
+                )
+            )
+            Result.success(planets)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchAllExoplanets(): Result<List<ExoplanetCandidate>> = withContext(Dispatchers.IO) {
+        try {
+            coroutineScope {
+                val d1 = async { fetchExoplanetCandidates().getOrDefault(emptyList()) }
+                val d2 = async { fetchKeplerCandidates().getOrDefault(emptyList()) }
+                val d3 = async { fetchK2Candidates().getOrDefault(emptyList()) }
+                val d4 = async { fetchConfirmedExoplanets().getOrDefault(emptyList()) }
+                Result.success(d1.await() + d2.await() + d3.await() + d4.await())
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

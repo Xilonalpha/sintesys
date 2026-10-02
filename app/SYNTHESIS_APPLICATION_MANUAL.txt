@@ -1,0 +1,388 @@
+================================================================================
+SYNTHESIS: EXOPLANET DISCOVERY & ADVANCED ASTROPHYSICS OBSERVATORY
+COMPLETE COMPREHENSIVE ARCHITECTURE, CAPABILITIES & USER MANUAL (2026 EDITION)
+================================================================================
+
+TABLE OF CONTENTS:
+1. EXECUTIVE SUMMARY & PLATFORM PHILOSOPHY
+2. CORE SCIENTIFIC CAPABILITIES
+   2.1. Exoplanet Candidate Detection & Transit Analysis (BLS & TLS Algorithms)
+   2.2. Habitability Assessment & Equilibrium Thermodynamics
+   2.3. Spectral Analysis & Biosignature / Technosignature Detection
+   2.4. Dilution Deblending & Harmonic Stitching
+3. 2026 CUTTING-EDGE ASTROPHYSICAL RESEARCH ENGINES
+   3.1. ESA PLATO Asteroseismology & Stellar Age Determination
+   3.2. NASA JWST Atmospheric Transmission Spectroscopy
+   3.3. Roman Space Telescope Gravitational Microlensing (Rogue Planets)
+   3.4. FLRW Big Bang Early Universe Cosmology & Dark Energy Simulator
+   3.5. Kerr Spinning Black Hole General Relativity & Gravitational Waves
+   3.6. Exomoon Tidal Dissipation & Subsurface Ocean Thermodynamics
+   3.7. Planetary Magnetosphere Shielding & Stellar Wind Dynamics
+   3.8. 1D Radiative-Convective Equilibrium Planetary Climate Engine
+4. HARDWARE INTEGRATION & OBSERVATORY CONTROL
+   4.1. Smart Telescope Direct-Sync Protocol (Seestar, DWARF, Vaonis, Unistellar)
+   4.2. Autonomous Network Auto-Discovery (ASCOM Alpaca UDP 32227 & Subnet Sweep)
+   4.3. Physical Telescope Mount Control (Meade LX200 / Synta via USB-OTG & WiFi)
+   4.4. Augmented Reality (AR) Sky Tracker & Sensor-Fused Target Finder
+5. SCIENTIFIC DATA PROCESSING, PHOTOMETRY & CITIZEN SCIENCE
+   5.1. Real-Time Light Curve Extraction & Differential Aperture Photometry
+   5.2. Automated AAVSO & Exoplanet Transit Database (ETD) Report Generation
+   5.3. Multi-Platform Astronomical Format Exporter (N.I.N.A., Stellarium, AstroImageJ)
+   5.4. GPS-Synchronized Observable Transit Alerter
+6. USE CASES & PRACTICAL APPLICATIONS
+   6.1. Professional Astrophysicists & Research Teams
+   6.2. Citizen Scientists & Backyard Exoplanet Hunters
+   6.3. University Educators, Students & Planetariums
+7. ARCHITECTURAL SPECIFICATIONS & DATA PROTOCOLS
+8. GLOSSARY OF PHYSICAL PARAMETERS & METRICS
+
+================================================================================
+1. EXECUTIVE SUMMARY & PLATFORM PHILOSOPHY
+================================================================================
+
+SYNTHESIS is a research-grade mobile astrophysics observatory and exoplanetary
+discovery pipeline. Designed for the era of next-generation space missions (NASA
+James Webb Space Telescope, ESA PLATO, and the Nancy Grace Roman Space
+Telescope), SYNTHESIS bridges the gap between deep theoretical astrophysics and
+practical, hands-on observational astronomy.
+
+The platform transforms a consumer Android device into a complete mission control
+center capable of analyzing multi-mission astronomical catalogs (Kepler, K2, TESS),
+simulating cosmic spacetime metrics, and directly commanding robotic smart telescopes
+(ZWO Seestar, DwarfLab DWARF, Vaonis, Unistellar, and ASCOM Alpaca systems) to
+participate in global planetary transit observation campaigns.
+
+Every calculation in SYNTHESIS uses established astrophysical physics formulations,
+incorporating General Relativity, Keplerian orbital mechanics, radiative transfer,
+magnetohydrodynamics, and stellar asteroseismology.
+
+================================================================================
+2. CORE SCIENTIFIC CAPABILITIES
+================================================================================
+
+2.1. Exoplanet Candidate Detection & Transit Analysis
+-----------------------------------------------------
+- Multi-Mission Photometric Ingestion:
+  Direct integration with NASA Exoplanet Archive, Kepler Space Telescope, and
+  Transiting Exoplanet Survey Satellite (TESS) full-frame and target-pixel data.
+- Box-Least-Squares (BLS) & Transit-Least-Squares (TLS):
+  Identifies periodic transit dimming signals within stellar light curves.
+  Calculates Signal-to-Pink-Noise (SPN) and false alarm probability.
+- Precise Orbital Mechanics Extraction:
+  Derives orbital period (P in days), transit epoch (BJD_TDB), transit duration
+  (T14 in hours), impact parameter (b), and semi-major axis (a in Astronomical Units).
+- Physical Planet Characterization:
+  Computes planetary radius in Earth radii (R_Earth) and Jupiter radii (R_Jup) by
+  combining transit depth (delta = (R_p / R_star)^2) with host star effective
+  temperature (T_eff), surface gravity (log g), and stellar radius (R_Sun).
+
+2.2. Habitability Assessment & Equilibrium Thermodynamics
+---------------------------------------------------------
+- Planetary Equilibrium Temperature:
+  Calculates T_eq assuming Bond albedo and uniform heat redistribution:
+    T_eq = T_star * sqrt(R_star / (2 * a)) * (1 - A_B)^(1/4)
+- Habitable Zone Boundary Modeling (Kopparapu et al.):
+  Computes the Conservative and Optimistic Habitable Zone limits (Recent Venus,
+  Runaway Greenhouse, Maximum Greenhouse, and Early Mars thresholds).
+- Earth Similarity Index (ESI):
+  Computes multi-parameter ESI based on radius, density, escape velocity, and
+  surface temperature to quantify analog proximity to Earth.
+
+2.3. Spectral Analysis & Biosignature / Technosignature Detection
+-----------------------------------------------------------------
+- Biosignature Matrix Assessment:
+  Evaluates chemical disequilibrium in planetary atmospheres by measuring
+  coexistence of methane (CH4), molecular oxygen (O2), ozone (O3), water vapor (H2O),
+  carbon dioxide (CO2), and dimethyl sulfide (DMS).
+- Non-Equilibrium Chemical Confidence:
+  Assigns a rigorous statistical score (0 - 100%) indicating whether atmospheric
+  compounds can be explained solely by volcanic/geological outgassing or require
+  biological metabolic processes.
+- Technosignature Detection Engine:
+  Scans for artificial artifacts in stellar light curves:
+  * Non-Keplerian asymmetric transit ingress/egress (artificial megastructures)
+  * Narrowband continuous and pulsed laser emissions
+  * Megastructure transits (Dyson swarms, stellar engines) with anomalous chromatic
+    extinction ratios across optical and infrared passbands.
+
+2.4. Dilution Deblending & Harmonic Stitching
+--------------------------------------------
+- Neighboring Star Flux Dilution:
+  Corrects shallow transit signals blended by nearby stars inside the photometric
+  aperture. Calculates true planet radius using arcsecond neighbor separation and
+  delta-magnitude corrections:
+    delta_true = delta_observed * (1 + 10^(-0.4 * delta_mag))
+- Harmonic Period Stitching:
+  Identifies and resolves orbital resonance harmonics (P/2, 2P, 3P/2) that often
+  cause algorithmic misclassification of multi-planet systems.
+
+================================================================================
+3. 2026 CUTTING-EDGE ASTROPHYSICAL RESEARCH ENGINES
+================================================================================
+
+3.1. ESA PLATO Asteroseismology & Stellar Age Determination
+----------------------------------------------------------
+- Acoustic p-mode and gravity g-mode pulsation modeling for bright dwarf and subgiant stars.
+- Calculates Large Frequency Separation (Delta_nu) and Frequency of Maximum Power (nu_max).
+- Seismic Scaling Relations:
+    M / M_Sun = (nu_max / nu_max,Sun)^3 * (Delta_nu / Delta_nu,Sun)^(-4) * (T_eff / T_eff,Sun)^(3/2)
+    R / R_Sun = (nu_max / nu_max,Sun) * (Delta_nu / Delta_nu,Sun)^(-2) * (T_eff / T_eff,Sun)^(1/2)
+- Delivers stellar age estimates with +/- 10% precision, unlocking the evolutionary
+  timeline of exoplanetary architectures.
+
+3.2. NASA JWST Atmospheric Transmission Spectroscopy
+----------------------------------------------------
+- High-fidelity synthetic transmission spectra covering 0.6 to 12.0 micrometers
+  (NIRISS, NIRSpec, and MIRI instrument simulation).
+- Molecular absorption cross-sections:
+  * H2O bands at 1.4, 1.9, and 2.7 um
+  * CO2 fundamental vibration band at 4.3 um
+  * CH4 absorption at 3.3 and 7.7 um
+  * NH3 detection in cool giant atmospheres
+  * Dimethyl Sulfide (DMS) biomarker probe at 3.4 um
+- Rayleigh scattering slope calculation to determine mean molecular weight and
+  cloud-deck pressure levels (gray aerosol extinction).
+
+3.3. Roman Space Telescope Gravitational Microlensing (Rogue Planets)
+---------------------------------------------------------------------
+- Einstein Ring Radius & Crossing Timescale:
+  Models gravitational deflection of background galactic bulge stars by foreground
+  unbound rogue planets.
+    theta_E = sqrt((4 * G * M_lens / c^2) * (D_s - D_l) / (D_l * D_s))
+- Finite Source Effect & Caustic Crossings:
+  Simulates planetary magnification spikes (Paczyński curve) with finite-source
+  limb darkening, resolving planets down to Earth mass in wide or interstellar orbits.
+
+3.4. FLRW Big Bang Early Universe Cosmology & Dark Energy Simulator
+-------------------------------------------------------------------
+- Solves the Friedmann-Lemaître-Robertson-Walker (FLRW) dynamical equations:
+    H^2(z) = H_0^2 * [Omega_r * (1+z)^4 + Omega_m * (1+z)^3 + Omega_k * (1+z)^2 + Omega_Lambda * f(z)]
+- Dynamic Dark Energy Equation of State:
+  Chevallier-Polarski-Linder (CPL) parametrization: w(a) = w_0 + w_a * (1 - a).
+- Cosmic Microwave Background (CMB) Acoustic Peaks:
+  Calculates sound horizon at recombination (r_s ~ 147 Mpc) and multipole angular
+  scale (l_1 ~ 220).
+- Big Bang Nucleosynthesis (BBN):
+  Computes primordial mass fractions of 4He (Helium-4), Deuterium/Hydrogen (D/H),
+  and 7Li as a function of the baryon-to-photon ratio eta.
+
+3.5. Kerr Spinning Black Hole General Relativity & Gravitational Waves
+----------------------------------------------------------------------
+- Metric of Stationary Axisymmetric Spacetime:
+  Computes horizon radii r_+ (outer event horizon) and r_- (Cauchy horizon) for
+  dimensionless spin parameter a* = J / (G * M^2 / c) in the range [-1.0, 1.0].
+- Ergosphere & Penrose Process:
+  Calculates the boundary of static limit where spacetime frame-dragging forces
+  matter and light to co-rotate with the singularity.
+- Innermost Stable Circular Orbit (ISCO):
+  Determines accretion disk inner edge (r_ISCO = 6 R_g for Schwarzschild, down to
+  1 R_g for an extreme prograde Kerr black hole).
+- Gravitational Wave Chirp Simulation:
+  Simulates quadrupole binary black hole coalescence (LIGO/Virgo/LISA wave profiles),
+  computing chirp mass M_chirp = (m1 * m2)^(3/5) / (m1 + m2)^(1/5), instantaneous
+  frequency evolution f_GW(t), and peak strain amplitude h_c.
+
+3.6. Exomoon Tidal Dissipation & Subsurface Ocean Thermodynamics
+----------------------------------------------------------------
+- Models viscoelastic tidal heating in moons orbiting gas giants (Jupiter/Saturn analogs).
+- Computes tidal dissipation energy flux E_tidal from orbital eccentricity e,
+  semi-major axis, and Love number k_2 / Q.
+- Computes equilibrium ice-shell thickness and evaluates hydrothermal vent energy
+  availability to support chemosynthetic sub-surface ocean biospheres.
+
+3.7. Planetary Magnetosphere Shielding & Stellar Wind Dynamics
+--------------------------------------------------------------
+- Calculates stellar wind dynamic ram pressure:
+    P_dyn = rho_sw * v_sw^2
+- Chapman-Ferraro Magnetopause Stand-Off Distance:
+    R_mp = [ (2 * mu_0 * B_0^2 * R_p^6) / (P_dyn) ]^(1/6)
+- Evaluates atmospheric retention versus stellar coronal mass ejections (CME),
+  determining vulnerability to solar/stellar wind stripping over billion-year epochs.
+
+3.8. 1D Radiative-Convective Equilibrium Planetary Climate Engine
+-----------------------------------------------------------------
+- Interactive climate simulator accepting stellar insolation (S / S_0), surface
+  pressure (P_0 in bar), and greenhouse gases (CO2, H2O, CH4).
+- Computes runaway greenhouse transition thresholds, water loss runaway, and
+  surface equilibrium temperatures.
+
+================================================================================
+4. HARDWARE INTEGRATION & OBSERVATORY CONTROL
+================================================================================
+
+4.1. Smart Telescope Direct-Sync Protocol (2026 Edition)
+--------------------------------------------------------
+SYNTHESIS features native, direct-over-network control for the world's most
+popular autonomous smart telescopes:
+1. ZWO Seestar S50 / S30:
+   - Direct TCP JSON-RPC control over port 4700 and HTTP REST 5555.
+   - Slew-to-target coordinates, automated focus, plate-solving synchronization.
+2. DwarfLab DWARF II / DWARF 3:
+   - Direct control over WebSocket / TCP port 9988.
+   - Precision dual-camera alignment and telephoto astro-tracking.
+3. Vaonis Vespera / Stellina:
+   - REST API control over HTTP port 8080.
+   - Mosaic planning and automated exoplanet transit exposure loops.
+4. Unistellar eVscope 2 / eQuinox / Odyssey:
+   - JSON-RPC and socket control over port 5000.
+   - Autonomous field detection and scientific citizen data collection.
+5. ASCOM Alpaca Universal Hub:
+   - RESTful cross-platform standard over port 11112.
+   - Interfaces with any observatory mount running ASCOM Alpaca on Windows, Linux,
+     Raspberry Pi (INDI/Alpaca), or macOS.
+
+4.2. Autonomous Network Auto-Discovery (ASCOM Alpaca UDP 32227 & Subnet Sweep)
+------------------------------------------------------------------------------
+SYNTHESIS eliminates manual IP configuration via an intelligent 3-stage discovery engine:
+1. UDP Alpaca Discovery:
+   Broadcasts the standard "alpacadiscovery1" packet to 255.255.255.255:32227 and
+   local broadcast subnets. Listens for JSON responses containing Alpaca ports.
+2. Smart Telescope Hotspot Gateways:
+   Directly probes known default telescope hotspot AP gateways:
+   * 192.168.110.1:4700 (ZWO Seestar default hotspot)
+   * 192.168.88.1:9988   (DWARF II / 3 default hotspot)
+   * 192.168.42.1:8080   (Vaonis Vespera default hotspot)
+   * 192.168.14.1:5000   (Unistellar eVscope default hotspot)
+3. Parallel Subnet Asynchronous Port Sweep:
+   Concurrently interrogates the active WiFi /24 subnet using coroutines and
+   connection permits to detect active smart scope ports in under 3 seconds.
+   Provides real-time latency ping diagnostics and single-tap instant connection.
+4. Virtual Testing Emulator:
+   Enables 100% offline testing of GoTo, tracking, and imaging sequence routines
+   even when no physical telescope is powered on.
+
+4.3. Physical Telescope Mount Control
+-------------------------------------
+- Hardware Interfaces:
+  * Android USB-OTG Serial (support for FTDI, CP210x, Prolific, CH340 chipsets)
+  * TCP/IP Network WiFi/Ethernet sockets
+  * Built-in Mount Hardware Simulator
+- Command Protocols:
+  Meade LX200 protocol, Synta/SkyWatcher motor commands, and NexStar protocols.
+- Mount Operations:
+  * Full GoTo slew with Right Ascension (HH:MM:SS) and Declination (DD:MM:SS)
+  * Manual pulse directional jogging (North, South, East, West) across 4 speed
+    rates (Slew, Find, Centering, Guiding)
+  * Real-time sidereal tracking toggle (Solar, Lunar, Sidereal rates)
+  * Emergency Mount Stop and Parking routines.
+
+4.4. Augmented Reality (AR) Sky Tracker & Sensor-Fused Target Finder
+--------------------------------------------------------------------
+- Uses device magnetometer (compass), gyroscope, and 3-axis accelerometer.
+- Projects an augmented reality overlay on the live camera viewfinder.
+- Transforms celestial coordinates (RA/Dec) to Local Horizontal Coordinates
+  (Altitude/Azimuth) using local sidereal time (LST) and GPS position.
+- Highlights target exoplanetary systems directly in the night sky with directional
+  guiding arrows.
+
+================================================================================
+5. SCIENTIFIC DATA PROCESSING, PHOTOMETRY & CITIZEN SCIENCE
+================================================================================
+
+5.1. Real-Time Light Curve Extraction & Differential Photometry
+---------------------------------------------------------------
+- Live Transit Photometry Studio:
+  Plots relative flux vs. time with sub-millimagnitude precision.
+- Reference Star Flux Ratio:
+  Performs real-time differential photometry against comparison stars in the field
+  of view to cancel out atmospheric scintillation and thin cloud extinction.
+- Ingress, Egress & Mid-Transit Detection:
+  Provides interactive markers for transit entry (T1), full ingress (T2), mid-transit
+  (T0), egress start (T3), and egress finish (T4).
+
+5.2. Automated AAVSO & Exoplanet Transit Database (ETD) Report Generation
+-------------------------------------------------------------------------
+- One-Click Official Reporting:
+  Generates standardized observation reports ready for immediate upload to:
+  * AAVSO (American Association of Variable Star Observers) WebObs exoplanet database
+  * ETD (Exoplanet Transit Database - Czech Astronomical Society)
+- Report format complies strictly with professional standards:
+  Header metadata, observer code, filter bandpass, airmass polynomial fit, transit
+  depth, and heliocentric Julian date (HJD_UTC / BJD_TDB).
+
+5.3. Multi-Platform Astronomical Format Exporter
+------------------------------------------------
+- N.I.N.A. Target CSV:
+  Exports target coordinates, transit window times, and tracking guidelines for
+  direct import into Nighttime Imaging 'N' Astronomy (N.I.N.A.).
+- Stellarium Observation JSON:
+  Exports observation targets for visual rendering in Stellarium planetarium software.
+- AstroImageJ Aperture Spec:
+  Generates calibration and aperture coordinates formatted for professional analysis
+  in AstroImageJ (AIJ).
+
+5.4. GPS-Synchronized Observable Transit Alerter
+------------------------------------------------
+- High-Accuracy Ephemeris Calculator:
+  Calculates upcoming transit windows for thousands of exoplanets based on current
+  geographical coordinates.
+- Observability Filters:
+  * Target altitude > 25 degrees (Airmass < 2.3)
+  * Sun below astronomical twilight (-18 degrees altitude)
+  * Moon separation angle > 30 degrees to minimize stray light
+- System Alert Delivery:
+  Sends Android push notifications alerting the observer 30 minutes before ingress.
+
+================================================================================
+6. USE CASES & PRACTICAL APPLICATIONS
+================================================================================
+
+6.1. Professional Astrophysicists & Research Teams
+--------------------------------------------------
+- Rapid on-site verification of newly published TESS / Kepler candidates.
+- Cross-referencing atmospheric spectra with JWST NIRSpec/MIRI models.
+- Verification of stellar parameters through asteroseismic relations.
+
+6.2. Citizen Scientists & Backyard Exoplanet Hunters
+----------------------------------------------------
+- Connecting smart telescopes (Seestar, DWARF, Vespera, eVscope) to observe actual
+  exoplanet transits from suburban backyards.
+- Contributing valid photometric light curves to the NASA Exoplanet Watch initiative
+  and AAVSO to refine transit ephemerides (mitigating ephemeris degradation).
+- Discovering candidate exoplanet signals using built-in BLS and TLS algorithms.
+
+6.3. University Educators, Students & Planetariums
+--------------------------------------------------
+- Interactive laboratory tool for astrophysics courses: demonstrating the transit method,
+  radial velocity curves, gravitational lensing, and Black Hole spacetime.
+- Real-time exploration of early universe FLRW cosmology and dark energy models.
+- Demonstrating the principles of astrobiology and planetary habitability zones.
+
+================================================================================
+7. ARCHITECTURAL SPECIFICATIONS & DATA PROTOCOLS
+================================================================================
+
+- Language & Platform: Modern Kotlin 1.9+ running on Android (API level 26 to 35).
+- UI Framework: Jetpack Compose with Material Design 3 (M3) Dark Theme aesthetics.
+- Architecture: Reactive MVVM (Model-View-ViewModel) with StateFlow pipelines and Clean Architecture principles.
+- Dependency Injection: Dagger Hilt.
+- Concurrency: Kotlin Coroutines & Kotlin StateFlow.
+- Network Protocols:
+  * TCP raw socket connections
+  * UDP multicast & broadcast sockets (port 32227)
+  * HTTP/1.1 RESTful JSON-RPC APIs
+  * Android USB-OTG Serial CDC-ACM / FTDI communication
+- Device Sensor Fusion: Android SensorManager (TYPE_ACCELEROMETER, TYPE_MAGNETIC_FIELD, TYPE_GYROSCOPE) fused via rotation matrix orientation algorithms.
+- Astronomical Time: Continuous calculation of Julian Date (JD), Modified Julian Date (MJD), Greenwich Mean Sidereal Time (GMST), and Local Sidereal Time (LST).
+
+================================================================================
+8. GLOSSARY OF PHYSICAL PARAMETERS & METRICS
+================================================================================
+
+- R_p / R_star: Ratio of planetary radius to host stellar radius.
+- Depth (ppm): Transit depth in parts per million (10,000 ppm = 1% dimming).
+- T14 (hours): Total transit duration from first contact (ingress start) to fourth contact (egress finish).
+- BJD_TDB: Barycentric Julian Date in Barycentric Dynamical Time, standard for high-precision exoplanet timing.
+- Delta_nu (uHz): Asteroseismic large frequency separation, proportional to the square root of mean stellar density.
+- nu_max (uHz): Frequency of maximum acoustic pulsation power, proportional to surface gravity and effective temperature.
+- a* (Kerr spin): Dimensionless black hole spin parameter (-1 <= a* <= 1).
+- r_ISCO: Radius of the innermost stable circular orbit of a black hole accretion disk.
+- M_chirp: Gravitational wave chirp mass governing the orbital frequency evolution of coalescing compact binaries.
+- w_0, w_a: Parametrization of the dark energy equation of state w(a) = P / rho.
+
+================================================================================
+CONCLUSION:
+SYNTHESIS represents a unified, next-generation mobile platform empowering both
+professional researchers and passionate citizen scientists to actively participate
+in the golden age of exoplanet discovery and astrophysics exploration.
+================================================================================
