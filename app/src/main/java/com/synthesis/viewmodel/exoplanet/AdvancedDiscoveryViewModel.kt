@@ -54,8 +54,11 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     val bigBangCosmologyEngine: BigBangCosmologyEngine,
     val blackHoleRelativityEngine: BlackHoleRelativityEngine,
     private val aavsoEtdReportGenerator: AavsoEtdReportGenerator,
-    private val photometricFileParser: PhotometricFileParser
+    private val photometricFileParser: PhotometricFileParser,
+    val celestronNexStarDriverService: CelestronNexStarDriverService
 ) : ViewModel() {
+
+    val nexStarTelemetry: StateFlow<NexStarTelemetry> = celestronNexStarDriverService.telemetry
 
     private val _selectedTab = MutableStateFlow(AdvancedTab.SMART_SCOPE)
     val selectedTab: StateFlow<AdvancedTab> = _selectedTab.asStateFlow()
@@ -340,4 +343,18 @@ class AdvancedDiscoveryViewModel @Inject constructor(
 
     fun addVirtualSmartScope(model: SmartScopeModel) =
         smartTelescopeSyncService.addVirtualTestScope(model)
+
+    // Dedicated Celestron NexStar 6SE Driver Actions
+    fun connectNexStarUsb(): Boolean = celestronNexStarDriverService.connectUsbOtg()
+    fun connectNexStarWifi(ip: String = "192.168.4.1", port: Int = 4030) = celestronNexStarDriverService.connectWifi(ip, port)
+    fun connectNexStarSim() = celestronNexStarDriverService.connectSimulation()
+    fun disconnectNexStar() = celestronNexStarDriverService.disconnect()
+    fun slewNexStarPrecise(raHours: Double, decDegrees: Double, targetName: String) =
+        celestronNexStarDriverService.slewToCoordinatesPrecise(raHours, decDegrees, targetName)
+    fun syncNexStarStar(raHours: Double, decDegrees: Double, starName: String) =
+        celestronNexStarDriverService.syncCoordinates(raHours, decDegrees, starName)
+    fun setNexStarTracking(mode: NexStarTrackingMode) = celestronNexStarDriverService.setTrackingMode(mode)
+    fun setNexStarRate(rate: NexStarTrackRate) = celestronNexStarDriverService.setTrackRate(rate)
+    fun emergencyStopNexStar() = celestronNexStarDriverService.emergencyStop()
+    fun pulseGuideNexStar(direction: NexStarGuideDirection, rate: Int = 1) = celestronNexStarDriverService.pulseGuide(direction, rate)
 }

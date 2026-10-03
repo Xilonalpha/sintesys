@@ -45,4 +45,30 @@
     <string name="btn_emergency_stop">EMERGENCY STOP (:Q#)</string>
     <string name="btn_park_mount">PARK MOUNT (HOME)</string>
     <string name="lbl_tracking">Sidereal Tracking</string>
+
+    <!-- Runtime Permissions Dialogs -->
+    <string name="perm_camera_title">Permisiune Cameră Necesară pentru AR</string>
+    <string name="perm_camera_desc">SYNTHESIS utilizează camera foto și senzorii de orientare pentru a proiecta exoplanetele și stelele gazdă direct peste bolta cerească vizibilă. Dacă refuzi permisiunea, poți explora în continuare folosind Simulatorul Stelar.</string>
+    <string name="perm_btn_grant_camera">ACORDĂ ACCES CAMERĂ</string>
+    <string name="perm_btn_stellar_sim">SIMULATOR STELAR</string>
+    <string name="perm_gps_notif_title">Alerte de Tranzit GPS în Timp Real</string>
+    <string name="perm_gps_notif_desc">Pentru a calcula fereastra exactă de vizibilitate când exoplaneta trece deasupra zenitului tău și pentru a primi alerte sonore la începerea tranzitului (Ingress), SYNTHESIS are nevoie de permisiunile de Notificare și Localizare GPS.</string>
+    <string name="perm_btn_grant_gps_notif">PERMITE NOTIFICĂRI ȘI GPS</string>
+    <string name="perm_btn_use_estimated_coords">COORDONATE ESTIMATE</string>
+
+    <!-- Scientific Theory and Laboratory Model Descriptions -->
+    <string name="theory_flrw_title">Modelul Cosmologic FLRW &amp; Inflație</string>
+    <string name="theory_flrw_desc">Ecuațiile Friedmann descriu expansiunea metrică a spațiului-timp omogen și izotrop, unde rata de expansiune depinde de densitatea de materie, radiație și energia întunecată dinamică (parametrizarea Chevallier-Polarski-Linder).</string>
+    <string name="theory_kerr_title">Metrica Kerr &amp; Relativitate Generală</string>
+    <string name="theory_kerr_desc">Soluția exactă a ecuațiilor lui Einstein în vid pentru o gaură neagră staționară cu rotație. Determină raza orizontului de evenimente, ergosfera și orbita circulară stabilă cea mai interioară (ISCO).</string>
+    <string name="theory_jwst_wasp39_title">Spectroscopie de Transmisie JWST — WASP-39 b</string>
+    <string name="theory_jwst_wasp39_desc">Profilul de absorbție atmosferică dezvăluie dioxid de carbon (CO₂ la 4.3 µm), apă (H₂O) și dioxid de sulf (SO₂) format prin procese fotochimice stelare pe gigantul gazos fierbinte.</string>
+    <string name="theory_plato_title">Asteroseismologie ESA PLATO</string>
+    <string name="theory_plato_desc">Măsurarea modurilor de oscilație acustică stelară (p-modes) furnizează frecvența maximă și separarea frecvențelor mari pentru a deduce masa și raza stelei cu o precizie sub 2%.</string>
+    <string name="theory_roman_title">Microlensare Gravitațională Nancy Grace Roman</string>
+    <string name="theory_roman_desc">Detecția planetelor hoinare (rogue planets) și a exoplanetelor pe orbite largi prin amplificarea tranzitorie a luminii unei stele de fundal conform razei inelului Einstein.</string>
+    <string name="theory_exomoon_title">Oceane Subglaciare și Maree pe Lunile Extrasolare</string>
+    <string name="theory_exomoon_desc">Disiparea mareică vâscoelastică generează căldură geotermală capabilă să mențină oceane lichide sub barieră de gheață pe sateliții planetelor gigante joviane.</string>
+    <string name="theory_spaceweather_title">Protecție Magnetosferică și Vânt Stelar</string>
+    <string name="theory_spaceweather_desc">Distanța de separare a magnetopauzei Chapman-Ferraro determină dacă atmosfera terestră este protejată sau erodată de ejecțiile de masă coronală (CME) ale stelei gazdă.</string>
 </resources>

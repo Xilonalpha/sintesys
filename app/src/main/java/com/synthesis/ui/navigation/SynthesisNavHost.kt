@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.synthesis.ui.screens.*
 import com.synthesis.ui.screens.xilon.XilonDiscoveryScreen
+import com.synthesis.ui.screens.terra.TerraFrontierScreen
 
 @Composable
 fun SynthesisNavHost(
@@ -22,7 +23,8 @@ fun SynthesisNavHost(
                 onViewExoplanets = { navController.navigate("exoplanets") },
                 onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
                 onViewDeepHunt = { navController.navigate("deep_hunt") },
-                onViewAdvancedLab = { navController.navigate("advanced_lab") }
+                onViewAdvancedLab = { navController.navigate("advanced_lab") },
+                onViewTerraFrontier = { navController.navigate("terra_frontier") }
             )
         }
         composable("new_investigation") {
@@ -89,7 +91,8 @@ fun SynthesisNavHost(
                 onViewDashboard = { navController.navigate("exoplanet_dashboard") },
                 onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
                 onViewDeepHunt = { navController.navigate("deep_hunt") },
-                onViewAdvancedLab = { navController.navigate("advanced_lab") }
+                onViewAdvancedLab = { navController.navigate("advanced_lab") },
+                onViewTerraFrontier = { navController.navigate("terra_frontier") }
             )
         }
         composable("exoplanet_dashboard") {
@@ -109,6 +112,11 @@ fun SynthesisNavHost(
         }
         composable("advanced_lab") {
             AdvancedDiscoveryScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("terra_frontier") {
+            TerraFrontierScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

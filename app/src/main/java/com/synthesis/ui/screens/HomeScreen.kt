@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,8 +26,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.Investigation
 import com.synthesis.domain.model.InvestigationStatus
+import com.synthesis.service.worker.CelestialSyncInfo
 import com.synthesis.ui.theme.*
 import com.synthesis.viewmodel.HomeViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,10 +40,17 @@ fun HomeScreen(
     onViewXilonDiscovery: () -> Unit = {},
     onViewDeepHunt: () -> Unit = {},
     onViewAdvancedLab: () -> Unit = {},
+    onViewTerraFrontier: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val investigations by viewModel.investigations.collectAsState()
     val systemStatus by viewModel.systemStatus.collectAsState()
+    val syncInfo by viewModel.syncInfo.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.loadSyncInfo(context)
+    }
 
     Scaffold(
         topBar = {
@@ -64,11 +74,11 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
-                                    color = AccentCyan.copy(alpha = 0.15f),
+                                    color = AccentCyan.copy(alpha = 0.2f),
                                     shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Text(
-                                        "v2026.2",
+                                        "v2026.3",
                                         color = AccentCyan,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
@@ -77,7 +87,7 @@ fun HomeScreen(
                                 }
                             }
                             Text(
-                                "Astrophysics & Cosmological Intelligence",
+                                "Astrophysics & Ephemeris Sync Live",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
@@ -169,7 +179,15 @@ fun HomeScreen(
         ) {
             item { Spacer(modifier = Modifier.height(4.dp)) }
 
-            // 1. SLEEK HORIZONTAL SYSTEM STATUS ROW
+            // 1. DYNAMIC CELESTIAL WORKMANAGER SYNC BAR (PRIMARY STATUS)
+            item {
+                CelestialSyncLiveBar(
+                    syncInfo = syncInfo,
+                    onTriggerSync = { viewModel.triggerLiveSync(context) }
+                )
+            }
+
+            // 1.5 SLEEK HORIZONTAL SYSTEM STATUS ROW
             item {
                 ModernSystemStatusBar(status = systemStatus)
             }
@@ -302,6 +320,17 @@ fun HomeScreen(
                         onClick = onViewXilonDiscovery
                     )
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                ModuleQuickCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = "🌍",
+                    title = "TERRA INCOGNITA: Deep Earth & Oceans",
+                    subtitle = "Oceane Hadale, Mantaua Terrei & Anomalia SAA",
+                    accentColor = Color(0xFF00E5FF),
+                    onClick = onViewTerraFrontier
+                )
             }
 
             // 4. ACTIVE INVESTIGATIONS LIST / ELEGANT EMPTY STATE
@@ -543,6 +572,100 @@ fun InvestigationCard(investigation: Investigation, onClick: () -> Unit) {
                 )
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun CelestialSyncLiveBar(
+    syncInfo: CelestialSyncInfo,
+    onTriggerSync: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("celestial_sync_live_bar"),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.75f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🛰️", fontSize = 16.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            "CELESTIAL & EPHEMERIS DYNAMIC SYNC",
+                            color = AccentCyan,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "WorkManager Periodic (1h) • JPL & NASA TAP",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                FilledTonalButton(
+                    onClick = onTriggerSync,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AccentCyan.copy(alpha = 0.15f),
+                        contentColor = AccentCyan
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.testTag("sync_celestial_now_button")
+                ) {
+                    Icon(Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("SYNC NOW", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        Text("LAST SYNC", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                        Text(syncInfo.formattedLastSync, color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        Text("SOLAR BODIES", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                        Text("${syncInfo.syncedBodies} (Moon, Mars, Jup, Sat)", color = AccentGreen, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        Text("GMST TIME", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                        val gmstStr = if (syncInfo.gmstHours > 0) String.format(Locale.US, "%.2fh", syncInfo.gmstHours) else "Realtime"
+                        Text(gmstStr, color = AccentAmber, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }

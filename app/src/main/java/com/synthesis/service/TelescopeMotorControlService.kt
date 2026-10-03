@@ -187,18 +187,24 @@ class TelescopeMotorControlService @Inject constructor(
 
         addLog("Comandă GoTo inițiată pentru '$targetName' (RA: $raHoursStr, Dec: $decDegStr)")
 
-        // Protocol command construction
+        // Protocol command construction (Meade LX200 + Celestron NexStar dual compatibility)
         val meadeRaCmd = ":Sr${formatMeadeRa(raHours)}#"
         val meadeDecCmd = ":Sd${formatMeadeDec(decDeg)}#"
         val meadeSlewCmd = ":MS#"
 
-        sendPhysicalCommand("$meadeRaCmd$meadeDecCmd$meadeSlewCmd")
+        // Celestron NexStar precise 16-bit hex GoTo: r<RA_HEX>,<DEC_HEX>
+        val nexStarRaVal = ((raHours / 24.0) * 65536.0).roundToInt().coerceIn(0, 65535)
+        val normDec = if (decDeg < 0) decDeg + 360.0 else decDeg
+        val nexStarDecVal = ((normDec / 360.0) * 65536.0).roundToInt().coerceIn(0, 65535)
+        val nexStarSlewCmd = String.format("r%04X,%04X#", nexStarRaVal, nexStarDecVal)
+
+        sendPhysicalCommand("$meadeRaCmd$meadeDecCmd$meadeSlewCmd$nexStarSlewCmd")
 
         _telemetry.value = _telemetry.value.copy(
             isSlewing = true,
             isParked = false,
             targetName = targetName,
-            lastExecutedCommand = "SLEW_GOTO -> $meadeSlewCmd"
+            lastExecutedCommand = "SLEW_GOTO -> $meadeSlewCmd / $nexStarSlewCmd"
         )
 
         // Smooth physical propagation simulation
@@ -271,13 +277,13 @@ class TelescopeMotorControlService @Inject constructor(
 
     fun emergencyStop() {
         slewJob?.cancel()
-        sendPhysicalCommand(":Q#")
+        sendPhysicalCommand(":Q#M#")
         _telemetry.value = _telemetry.value.copy(
             isSlewing = false,
             isTracking = false,
-            lastExecutedCommand = "EMERGENCY_HALT (:Q#)"
+            lastExecutedCommand = "EMERGENCY_HALT (:Q# / M#)"
         )
-        addLog("⚠️ OPRIRE DE URGENȚĂ MOTOARE ACTIVATĂ (:Q#)! Toate mișcările mecanice au fost sistate.")
+        addLog("⚠️ OPRIRE DE URGENȚĂ MOTOARE ACTIVATĂ (Meade :Q# & Celestron NexStar M#)! Toate mișcările mecanice au fost sistate.")
     }
 
     fun parkMount() {

@@ -397,10 +397,24 @@ class ExoplanetCandidateFinder @Inject constructor() {
         val m = massEarth ?: estimateMassFromRadius(r) ?: return null
 
         return when {
-            p < 4.0 && ((r in 2.0..7.0) || (m in 10.0..100.0)) -> "Neptunian Desert Anomaly"
+            // 1. Giant gas planets (R > 7.0 R⊕) on ultra-short orbits are USP Hot Jupiters, NOT Neptunian Desert!
+            r > 7.0 && p < 1.0 -> "Ultra-Short Period Hot Jupiter (USP)"
+            r > 7.0 && p < 4.0 -> "Hot Jupiter"
+
+            // 2. Genuine Neptunian Desert: intermediate radii (1.8 <= R <= 7.0 R⊕) and masses (8 <= M <= 80 M⊕) on P < 4.0d
+            p < 4.0 && r in 1.8..7.0 && m in 8.0..80.0 -> "Neptunian Desert Anomaly"
+
+            // 3. Ultra-Short Period Rocky/Magma Worlds
+            p < 1.0 && r <= 2.0 -> "Ultra-Short Period Magma World (USP)"
             p < 1.0 -> "Ultra-Short Period (USP)"
+
+            // 4. Circumstellar Habitable Zone sub-classification
+            inHz && r in 0.5..2.5 -> "Habitable Zone Terrestrial Candidate"
+            inHz && r > 2.5 -> "Temperate Sub-Neptune (HZ Candidate)"
             inHz -> "Habitable Zone Candidate"
-            p > 300.0 -> "Long-Period Transit"
+
+            // 5. Rare Long-Period transits & Super-puffs
+            p > 300.0 -> "Long-Period Transit Candidate"
             r > 6.0 && m < 15.0 -> "Super-Puff Anomaly"
             else -> null
         }
@@ -423,4 +437,431 @@ class ExoplanetCandidateFinder @Inject constructor() {
         val date = LocalDate.parse(isoDate.take(10))
         ChronoUnit.DAYS.between(date, LocalDate.now())
     } catch (e: Exception) { null }
+
+    /**
+     * Planetary Habitability Laboratory (PHL) at UPR Arecibo — Habitable Worlds Catalog.
+     * The global gold-standard benchmark for confirmed exoplanets with the highest Earth Similarity Index (ESI).
+     */
+    fun getPhlHabitableCatalog(): List<ExoplanetCandidate> {
+        return listOf(
+            ExoplanetCandidate(
+                toiId = "Teegarden's Star b",
+                ticId = "Teegarden's Star (SO J025300.5+165253)",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 4.91,
+                transitDurationHours = null,
+                transitDepthPpm = null,
+                planetRadiusEarth = 1.02,
+                planetMassEarth = 1.05,
+                insolationEarthFlux = 1.15,
+                equilibriumTempK = 264.0,
+                stellarTessMagnitude = 11.2,
+                stellarDistancePc = 3.83,
+                stellarEffTempK = 2904.0,
+                stellarRadiusSun = 0.107,
+                createdDate = "2019-06-18",
+                lastUpdated = "2024-01-15",
+                worthInvestigatingScore = 0.98f,
+                earthSimilarityIndex = 0.95f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Radial Velocity (CARMENES)",
+                discoveryYear = 2019,
+                scoreReasoning = listOf(
+                    "Highest ESI in the entire PHL Catalog (ESI = 0.95)",
+                    "Earth-mass world (1.05 M⊕) at 3.83 parsecs distance",
+                    "Temperate equilibrium temperature (264 K, close to Earth's 255 K)"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "TOI-700 d",
+                ticId = "TIC 150428135",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 37.42,
+                transitDurationHours = 3.6,
+                transitDepthPpm = 980.0,
+                planetRadiusEarth = 1.14,
+                planetMassEarth = 1.25,
+                insolationEarthFlux = 0.86,
+                equilibriumTempK = 269.0,
+                stellarTessMagnitude = 12.1,
+                stellarDistancePc = 31.1,
+                stellarEffTempK = 3480.0,
+                stellarRadiusSun = 0.415,
+                createdDate = "2020-01-06",
+                lastUpdated = "2023-11-20",
+                worthInvestigatingScore = 0.96f,
+                earthSimilarityIndex = 0.93f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Transit (NASA TESS & Spitzer)",
+                discoveryYear = 2020,
+                scoreReasoning = listOf(
+                    "First Earth-sized habitable zone planet discovered by NASA TESS",
+                    "ESI = 0.93 — 86% of Earth's solar insolation",
+                    "Quiet M-dwarf host star with virtually zero flaring activity"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "Kepler-1649 c",
+                ticId = "KIC 6449612",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 19.54,
+                transitDurationHours = 2.1,
+                transitDepthPpm = 640.0,
+                planetRadiusEarth = 1.06,
+                planetMassEarth = 1.20,
+                insolationEarthFlux = 0.75,
+                equilibriumTempK = 234.0,
+                stellarTessMagnitude = 16.2,
+                stellarDistancePc = 92.4,
+                stellarEffTempK = 3240.0,
+                stellarRadiusSun = 0.23,
+                createdDate = "2020-04-15",
+                lastUpdated = "2022-09-10",
+                worthInvestigatingScore = 0.95f,
+                earthSimilarityIndex = 0.92f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Transit (Kepler False Positive Working Group Recovery)",
+                discoveryYear = 2020,
+                scoreReasoning = listOf(
+                    "Most Earth-like planet in both size (1.06 R⊕) and temperature in Kepler data",
+                    "ESI = 0.92, recovered from false-positive algorithmic rejects by human vetting"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "Proxima Centauri b",
+                ticId = "Alpha Centauri C",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 11.19,
+                transitDurationHours = null,
+                transitDepthPpm = null,
+                planetRadiusEarth = 1.03,
+                planetMassEarth = 1.07,
+                insolationEarthFlux = 0.65,
+                equilibriumTempK = 234.0,
+                stellarTessMagnitude = 7.4,
+                stellarDistancePc = 1.30,
+                stellarEffTempK = 3042.0,
+                stellarRadiusSun = 0.141,
+                createdDate = "2016-08-24",
+                lastUpdated = "2024-03-01",
+                worthInvestigatingScore = 0.97f,
+                earthSimilarityIndex = 0.87f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Radial Velocity (ESO HARPS & UVES)",
+                discoveryYear = 2016,
+                scoreReasoning = listOf(
+                    "Closest known exoplanet to our Solar System (1.30 pc / 4.24 light-years)",
+                    "ESI = 0.87, primary target for interstellar flyby probe missions (Breakthrough Starshot)"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "TRAPPIST-1 e",
+                ticId = "2MASS J23062928-0502285",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 6.10,
+                transitDurationHours = 0.9,
+                transitDepthPpm = 4900.0,
+                planetRadiusEarth = 0.92,
+                planetMassEarth = 0.69,
+                insolationEarthFlux = 0.66,
+                equilibriumTempK = 251.0,
+                stellarTessMagnitude = 14.5,
+                stellarDistancePc = 12.1,
+                stellarEffTempK = 2566.0,
+                stellarRadiusSun = 0.119,
+                createdDate = "2017-02-22",
+                lastUpdated = "2024-02-18",
+                worthInvestigatingScore = 0.97f,
+                earthSimilarityIndex = 0.85f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Transit (TRAPPIST & Spitzer & Kepler)",
+                discoveryYear = 2017,
+                scoreReasoning = listOf(
+                    "Rocky core composition most closely matching Earth's iron/silicate ratio",
+                    "ESI = 0.85, prime James Webb Space Telescope (JWST) atmospheric transmission target"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "LHS 1140 b",
+                ticId = "TIC 92226327",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 24.74,
+                transitDurationHours = 2.1,
+                transitDepthPpm = 5100.0,
+                planetRadiusEarth = 1.73,
+                planetMassEarth = 5.60,
+                insolationEarthFlux = 0.43,
+                equilibriumTempK = 226.0,
+                stellarTessMagnitude = 10.9,
+                stellarDistancePc = 15.0,
+                stellarEffTempK = 3216.0,
+                stellarRadiusSun = 0.216,
+                createdDate = "2017-04-19",
+                lastUpdated = "2024-07-12",
+                worthInvestigatingScore = 0.94f,
+                earthSimilarityIndex = 0.82f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Transit & Radial Velocity (MEarth & HARPS)",
+                discoveryYear = 2017,
+                scoreReasoning = listOf(
+                    "Candidate Water-World or Ocean Planet with nitrogen-rich atmosphere detected by JWST",
+                    "Dense, low-activity M-dwarf host star, highly favorable for atmospheric retention"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "Kepler-452 b",
+                ticId = "KIC 8311079",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 384.84,
+                transitDurationHours = 10.5,
+                transitDepthPpm = 200.0,
+                planetRadiusEarth = 1.63,
+                planetMassEarth = 3.29,
+                insolationEarthFlux = 1.10,
+                equilibriumTempK = 265.0,
+                stellarTessMagnitude = 13.4,
+                stellarDistancePc = 560.0,
+                stellarEffTempK = 5757.0,
+                stellarRadiusSun = 1.11,
+                createdDate = "2015-07-23",
+                lastUpdated = "2022-01-10",
+                worthInvestigatingScore = 0.91f,
+                earthSimilarityIndex = 0.83f,
+                isInHabitableZone = true,
+                anomalyType = "Long-Period Transit Candidate",
+                discoveryMethod = "Transit (NASA Kepler)",
+                discoveryYear = 2015,
+                scoreReasoning = listOf(
+                    "Orbit around a G2V Solar Twin star with a 384-day year (closest analogue to Earth's year)",
+                    "ESI = 0.83, super-Earth in the circumstellar habitable zone of a Sun-like star"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "K2-18 b",
+                ticId = "EPIC 201912552",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 32.94,
+                transitDurationHours = 2.7,
+                transitDepthPpm = 2800.0,
+                planetRadiusEarth = 2.61,
+                planetMassEarth = 8.63,
+                insolationEarthFlux = 0.94,
+                equilibriumTempK = 255.0,
+                stellarTessMagnitude = 11.2,
+                stellarDistancePc = 38.0,
+                stellarEffTempK = 3457.0,
+                stellarRadiusSun = 0.41,
+                createdDate = "2015-06-01",
+                lastUpdated = "2024-04-10",
+                worthInvestigatingScore = 0.92f,
+                earthSimilarityIndex = 0.73f,
+                isInHabitableZone = true,
+                anomalyType = "Temperate Sub-Neptune (HZ Candidate)",
+                discoveryMethod = "Transit (NASA K2 Mission)",
+                discoveryYear = 2015,
+                scoreReasoning = listOf(
+                    "JWST detected methane and carbon dioxide in its atmosphere",
+                    "Prime candidate for a Hycean world (hydrogen atmosphere over a global liquid ocean)"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "Wolf 1069 b",
+                ticId = "TIC 382224424",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.PHL_HABITABLE,
+                orbitalPeriodDays = 15.56,
+                transitDurationHours = null,
+                transitDepthPpm = null,
+                planetRadiusEarth = 1.08,
+                planetMassEarth = 1.26,
+                insolationEarthFlux = 0.65,
+                equilibriumTempK = 250.0,
+                stellarTessMagnitude = 9.8,
+                stellarDistancePc = 9.6,
+                stellarEffTempK = 3158.0,
+                stellarRadiusSun = 0.18,
+                createdDate = "2023-01-05",
+                lastUpdated = "2024-02-01",
+                worthInvestigatingScore = 0.93f,
+                earthSimilarityIndex = 0.85f,
+                isInHabitableZone = true,
+                anomalyType = "Habitable Zone Terrestrial Candidate",
+                discoveryMethod = "Radial Velocity (CARMENES)",
+                discoveryYear = 2023,
+                scoreReasoning = listOf(
+                    "Earth-mass planet (1.26 M⊕) within 10 parsecs of Earth",
+                    "ESI = 0.85, retains magnetic dynamo potential according to geophysical models"
+                )
+            )
+        )
+    }
+
+    /**
+     * ESA CHEOPS & Gaia Catalog: European Space Agency space missions specializing
+     * in ultra-high precision transit photometry (CHEOPS) and micro-arcsecond astrometry (Gaia DR3).
+     */
+    fun getCheopsAndGaiaCatalog(): List<ExoplanetCandidate> {
+        return listOf(
+            ExoplanetCandidate(
+                toiId = "Nu2 Lupi d",
+                ticId = "HD 136352 d",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.CHEOPS_GAIA,
+                orbitalPeriodDays = 107.58,
+                transitDurationHours = 9.1,
+                transitDepthPpm = 860.0,
+                planetRadiusEarth = 2.56,
+                planetMassEarth = 8.82,
+                insolationEarthFlux = 1.80,
+                equilibriumTempK = 363.0,
+                stellarTessMagnitude = 5.2,
+                stellarDistancePc = 14.6,
+                stellarEffTempK = 5664.0,
+                stellarRadiusSun = 1.05,
+                createdDate = "2021-06-28",
+                lastUpdated = "2023-09-12",
+                worthInvestigatingScore = 0.95f,
+                earthSimilarityIndex = 0.62f,
+                isInHabitableZone = false,
+                anomalyType = "Long-Period Transit Candidate",
+                discoveryMethod = "Transit Photometry (ESA CHEOPS serendipitous discovery)",
+                discoveryYear = 2021,
+                scoreReasoning = listOf(
+                    "Serendipitous transiting sub-Neptune around a bright star visible to the naked eye (V = 5.7)",
+                    "Precise density measured by ESA CHEOPS: high water/volatile content (up to 25% by mass)"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "LTT 9779 b",
+                ticId = "TIC 183800431",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.CHEOPS_GAIA,
+                orbitalPeriodDays = 0.79,
+                transitDurationHours = 1.4,
+                transitDepthPpm = 2200.0,
+                planetRadiusEarth = 4.72,
+                planetMassEarth = 29.3,
+                insolationEarthFlux = 1250.0,
+                equilibriumTempK = 2000.0,
+                stellarTessMagnitude = 9.7,
+                stellarDistancePc = 80.6,
+                stellarEffTempK = 5443.0,
+                stellarRadiusSun = 0.95,
+                createdDate = "2020-09-21",
+                lastUpdated = "2023-07-10",
+                worthInvestigatingScore = 0.93f,
+                earthSimilarityIndex = 0.12f,
+                isInHabitableZone = false,
+                anomalyType = "Neptunian Desert Anomaly",
+                discoveryMethod = "Transit & Reflectance (ESA CHEOPS & TESS)",
+                discoveryYear = 2020,
+                scoreReasoning = listOf(
+                    "The 'Mirror Planet' — highest geometric albedo ever measured for an exoplanet (0.80)",
+                    "Ultra-hot Neptune surviving deep in the Neptunian Desert thanks to reflective titanium clouds"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "WASP-103 b",
+                ticId = "2MASS J16371556+0711000",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.CHEOPS_GAIA,
+                orbitalPeriodDays = 0.92,
+                transitDurationHours = 1.8,
+                transitDepthPpm = 17500.0,
+                planetRadiusEarth = 17.1,
+                planetMassEarth = 474.0,
+                insolationEarthFlux = 3400.0,
+                equilibriumTempK = 2510.0,
+                stellarTessMagnitude = 11.8,
+                stellarDistancePc = 470.0,
+                stellarEffTempK = 6110.0,
+                stellarRadiusSun = 1.44,
+                createdDate = "2022-01-11",
+                lastUpdated = "2023-04-15",
+                worthInvestigatingScore = 0.89f,
+                earthSimilarityIndex = 0.08f,
+                isInHabitableZone = false,
+                anomalyType = "Ultra-Short Period Hot Jupiter (USP)",
+                discoveryMethod = "Tidal Deformation Photometry (ESA CHEOPS)",
+                discoveryYear = 2022,
+                scoreReasoning = listOf(
+                    "First direct detection of the non-spherical, rugby-ball tidal deformation of an exoplanet",
+                    "CHEOPS measured the Love number k2, revealing internal composition similar to Jupiter"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "WASP-189 b",
+                ticId = "HD 133112 b",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.CHEOPS_GAIA,
+                orbitalPeriodDays = 2.72,
+                transitDurationHours = 4.3,
+                transitDepthPpm = 3900.0,
+                planetRadiusEarth = 17.9,
+                planetMassEarth = 635.0,
+                insolationEarthFlux = 4800.0,
+                equilibriumTempK = 3200.0,
+                stellarTessMagnitude = 6.6,
+                stellarDistancePc = 99.0,
+                stellarEffTempK = 8000.0,
+                stellarRadiusSun = 2.36,
+                createdDate = "2020-09-28",
+                lastUpdated = "2023-06-20",
+                worthInvestigatingScore = 0.91f,
+                earthSimilarityIndex = 0.06f,
+                isInHabitableZone = false,
+                anomalyType = "Hot Jupiter",
+                discoveryMethod = "High-Precision Photometry (ESA CHEOPS first science target)",
+                discoveryYear = 2020,
+                scoreReasoning = listOf(
+                    "One of the hottest known exoplanets (3200 K), orbiting an A-type star that rotates rapidly",
+                    "CHEOPS occultation measurements revealed gravity darkening on the host star"
+                )
+            ),
+            ExoplanetCandidate(
+                toiId = "Gaia-1 b (Gaia-14aae)",
+                ticId = "Gaia DR3 158223611894459264",
+                disposition = TfopwgDisposition.CONFIRMED,
+                catalogSource = ExoplanetCatalogSource.CHEOPS_GAIA,
+                orbitalPeriodDays = 182.4,
+                transitDurationHours = null,
+                transitDepthPpm = null,
+                planetRadiusEarth = 12.5,
+                planetMassEarth = 3800.0, // ~12 Jupiter masses
+                insolationEarthFlux = 1.05,
+                equilibriumTempK = 270.0,
+                stellarTessMagnitude = 12.8,
+                stellarDistancePc = 72.0,
+                stellarEffTempK = 5400.0,
+                stellarRadiusSun = 0.92,
+                createdDate = "2022-06-13",
+                lastUpdated = "2024-05-01",
+                worthInvestigatingScore = 0.88f,
+                earthSimilarityIndex = 0.25f,
+                isInHabitableZone = true,
+                anomalyType = "Long-Period Transit Candidate",
+                discoveryMethod = "Astrometry (ESA Gaia DR3 Non-Single Stars Catalog)",
+                discoveryYear = 2022,
+                scoreReasoning = listOf(
+                    "Discovered via micro-arcsecond astrometric stellar wobble in ESA Gaia DR3 data",
+                    "Temperate super-Jupiter with possible massive habitable exomoons"
+                )
+            )
+        )
+    }
 }
+

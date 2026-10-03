@@ -25,10 +25,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.synthesis.R
 import com.synthesis.service.ArExoplanetTarget
 import com.synthesis.service.ArSkyTrackerService
 import com.synthesis.ui.theme.*
@@ -50,16 +53,18 @@ fun ArSkyCameraScreen(
         )
     }
 
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasCameraPermission = isGranted
+    var showPermissionDialog by remember {
+        mutableStateOf(!hasCameraPermission)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasCameraPermission = permissions[Manifest.permission.CAMERA] == true
+        showPermissionDialog = false
     }
 
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
-            launcher.launch(Manifest.permission.CAMERA)
-        }
         arService.startTracking()
     }
 
@@ -75,7 +80,71 @@ fun ArSkyCameraScreen(
     }
 
     var selectedTarget by remember { mutableStateOf<ArExoplanetTarget?>(targets.firstOrNull()) }
-    var manualMode by remember { mutableStateOf(!deviceOrientation.sensorActive) }
+    var manualMode by remember { mutableStateOf(!deviceOrientation.sensorActive || !hasCameraPermission) }
+
+    if (showPermissionDialog && !hasCameraPermission) {
+        AlertDialog(
+            onDismissRequest = {
+                showPermissionDialog = false
+                manualMode = true
+            },
+            icon = {
+                Icon(Icons.Default.Videocam, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(32.dp))
+            },
+            title = {
+                Text(
+                    stringResource(R.string.perm_camera_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.perm_camera_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.CAMERA,
+                                Manifest.permission.ACCESS_FINE_LOCATION
+                            )
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                    modifier = Modifier.testTag("grant_camera_permission_button")
+                ) {
+                    Text(
+                        stringResource(R.string.perm_btn_grant_camera),
+                        color = DarkBackground,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionDialog = false
+                        manualMode = true
+                    },
+                    modifier = Modifier.testTag("use_stellar_sim_button")
+                ) {
+                    Text(
+                        stringResource(R.string.perm_btn_stellar_sim),
+                        color = AccentAmber,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            containerColor = Color(0xFF0F172A),
+            modifier = Modifier.testTag("ar_camera_permission_dialog")
+        )
+    }
 
     Scaffold(
         topBar = {

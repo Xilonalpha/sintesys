@@ -50,6 +50,8 @@ enum class ExoplanetCatalogSource(val displayName: String, val badgeColorHex: Lo
     TESS("NASA TESS (TOI)", 0xFF00E5FF),
     KEPLER_KOI("Kepler Prime (KOI)", 0xFFFF9100),
     K2("Kepler K2 Mission", 0xFFFFD700),
-    UNVETTED_DISCOVERY("Unvetted Candidate", 0xFF00E676),
+    PHL_HABITABLE("PHL Habitable (Arecibo)", 0xFF00E676),
+    CHEOPS_GAIA("ESA CHEOPS & Gaia", 0xFF00B0FF),
+    UNVETTED_DISCOVERY("Unvetted Candidate", 0xFFE040FB),
     CONFIRMED_BENCHMARK("Confirmed Exoplanet", 0xFF7C4DFF)
 }

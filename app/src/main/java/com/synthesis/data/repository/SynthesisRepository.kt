@@ -472,17 +472,61 @@ class SynthesisRepository @Inject constructor(
         }
     }
 
+    suspend fun saveCachedExoplanets(candidates: List<ExoplanetCandidate>) = withContext(Dispatchers.IO) {
+        try {
+            val entities = candidates.map { CachedExoplanetEntity.fromDomain(it) }
+            database.cachedExoplanetDao().insertAll(entities)
+            database.cachedExoplanetDao().trimToMax500()
+        } catch (e: Exception) {
+            android.util.Log.w("SynthesisRepository", "Could not persist exoplanet candidates to Room cache: ${e.message}")
+        }
+    }
+
+    suspend fun getCachedExoplanets(): List<ExoplanetCandidate> = withContext(Dispatchers.IO) {
+        try {
+            database.cachedExoplanetDao().getCachedCandidates().map { it.toDomain() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun fetchPhlHabitablePlanets(): List<ExoplanetCandidate> {
+        return exoplanetCandidateFinder.getPhlHabitableCatalog()
+    }
+
+    fun fetchCheopsAndGaiaPlanets(): List<ExoplanetCandidate> {
+        return exoplanetCandidateFinder.getCheopsAndGaiaCatalog()
+    }
+
     suspend fun fetchAllExoplanets(): Result<List<ExoplanetCandidate>> = withContext(Dispatchers.IO) {
         try {
-            coroutineScope {
+            val combined = coroutineScope {
                 val d1 = async { fetchExoplanetCandidates().getOrDefault(emptyList()) }
                 val d2 = async { fetchKeplerCandidates().getOrDefault(emptyList()) }
                 val d3 = async { fetchK2Candidates().getOrDefault(emptyList()) }
                 val d4 = async { fetchConfirmedExoplanets().getOrDefault(emptyList()) }
-                Result.success(d1.await() + d2.await() + d3.await() + d4.await())
+                val d5 = async { fetchPhlHabitablePlanets() }
+                val d6 = async { fetchCheopsAndGaiaPlanets() }
+                d5.await() + d6.await() + d1.await() + d2.await() + d3.await() + d4.await()
+            }
+            if (combined.isNotEmpty()) {
+                saveCachedExoplanets(combined.take(500))
+                Result.success(combined)
+            } else {
+                val cached = getCachedExoplanets()
+                if (cached.isNotEmpty()) {
+                    Result.success(cached)
+                } else {
+                    Result.failure(Exception("No exoplanets found in archive or offline cache"))
+                }
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            val cached = getCachedExoplanets()
+            if (cached.isNotEmpty()) {
+                Result.success(cached)
+            } else {
+                Result.failure(e)
+            }
         }
     }
 

@@ -21,9 +21,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.synthesis.R
 import com.synthesis.domain.model.cosmology.CosmicEpoch
 import com.synthesis.domain.model.cosmology.ExpansionCurvePoint
 import com.synthesis.engine.cosmology.BigBangCosmologyEngine
@@ -66,7 +68,7 @@ fun BigBangUniverseScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "🌌 BIG BANG & EVOLUȚIE COSMOLOGICĂ",
+                            "🌌 " + stringResource(R.string.theory_flrw_title).uppercase(),
                             color = AccentCyan,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
@@ -86,7 +88,7 @@ fun BigBangUniverseScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        "Simulator al ecuațiilor Friedmann de la Era Planck (t < 10⁻⁴³ s), Inflație, BBN, Decuplarea CMB până la accelerarea Energiei Întunecate.",
+                        stringResource(R.string.theory_flrw_desc),
                         color = TextSecondary,
                         style = MaterialTheme.typography.bodySmall
                     )

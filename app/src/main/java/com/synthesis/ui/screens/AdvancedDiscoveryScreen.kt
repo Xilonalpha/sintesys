@@ -1,9 +1,14 @@
 package com.synthesis.ui.screens
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,11 +28,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.synthesis.R
 import com.synthesis.ui.screens.cosmology.BigBangUniverseScreen
 import com.synthesis.ui.screens.cosmology.BlackHoleRelativityScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -69,7 +77,87 @@ fun AdvancedDiscoveryScreen(
 
     var showDeblendDialog by remember { mutableStateOf(false) }
 
+    var pendingAlertTarget by remember { mutableStateOf<LiveTransitTarget?>(null) }
+    var showGpsAlertRationaleDialog by remember { mutableStateOf(false) }
+
+    val gpsAlertPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        pendingAlertTarget?.let { target ->
+            viewModel.triggerGpsTransitNotification(target)
+        }
+        pendingAlertTarget = null
+        showGpsAlertRationaleDialog = false
+    }
+
     val remainingMinutes = remainingTrialSeconds / 60
+
+    if (showGpsAlertRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showGpsAlertRationaleDialog = false
+                pendingAlertTarget?.let { viewModel.triggerGpsTransitNotification(it) }
+                pendingAlertTarget = null
+            },
+            icon = {
+                Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(32.dp))
+            },
+            title = {
+                Text(
+                    stringResource(R.string.perm_gps_notif_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.perm_gps_notif_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val permsToRequest = mutableListOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        gpsAlertPermissionLauncher.launch(permsToRequest.toTypedArray())
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentAmber),
+                    modifier = Modifier.testTag("grant_gps_notif_button")
+                ) {
+                    Text(
+                        stringResource(R.string.perm_btn_grant_gps_notif),
+                        color = DarkBackground,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showGpsAlertRationaleDialog = false
+                        pendingAlertTarget?.let { viewModel.triggerGpsTransitNotification(it) }
+                        pendingAlertTarget = null
+                    },
+                    modifier = Modifier.testTag("use_estimated_coords_button")
+                ) {
+                    Text(
+                        stringResource(R.string.perm_btn_use_estimated_coords),
+                        color = TextSecondary
+                    )
+                }
+            },
+            containerColor = Color(0xFF0F172A),
+            modifier = Modifier.testTag("gps_transit_alert_dialog")
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -237,7 +325,23 @@ fun AdvancedDiscoveryScreen(
                 AdvancedTab.SKY_RADAR -> SkyRadarView(
                     transits = liveTransits,
                     onSendGpsAlert = { target ->
-                        viewModel.triggerGpsTransitNotification(target)
+                        val hasLoc = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+                        val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                        } else true
+
+                        if (!hasLoc || !hasNotif) {
+                            pendingAlertTarget = target
+                            showGpsAlertRationaleDialog = true
+                        } else {
+                            viewModel.triggerGpsTransitNotification(target)
+                        }
                     },
                     onExport = { target, format ->
                         viewModel.exportTargetFormat(target, format)
@@ -456,8 +560,8 @@ private fun TelescopeControlView(
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        "Conectează telefonul direct la telecomanda monturii (Hand Controller) prin cablu USB-OTG " +
-                                "sau prin rețeaua WiFi locală (SynScan, OnStep, ASCOM Alpaca).",
+                        "Compatibil nativ cu Celestron NexStar 6SE / 8SE / Evolution (telecomanda NexStar+ prin USB-OTG sau WiFi SkyPortal 4030), " +
+                                "precum și monturi Meade LX200, Sky-Watcher SynScan și OnStep. Oferă rezoluție sub-arcsecundă (comenzi hexazecimale r/e/s) pentru deep-sky.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

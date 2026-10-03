@@ -14,8 +14,8 @@ android {
         applicationId = "com.synthesis"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.5.0"
+        versionCode = 8
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -98,6 +98,10 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     implementation("com.google.code.gson:gson:2.11.0")
+
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    ksp("androidx.hilt:hilt-compiler:1.2.0")
 
     testImplementation("junit:junit:4.13.2")
 }

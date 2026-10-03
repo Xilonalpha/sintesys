@@ -12,10 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.synthesis.R
 import com.synthesis.domain.model.exoplanet.JwstTransmissionSpectrumResult
 import com.synthesis.ui.theme.*
 
@@ -39,7 +41,7 @@ fun JwstTransmissionSpectroscopyView(
                         Icon(Icons.Default.BlurOn, contentDescription = null, tint = AccentAmber)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "JWST TRANSMISSION SPECTROSCOPY (CYCLE 4/5 - 2026)",
+                            stringResource(R.string.theory_jwst_wasp39_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -47,7 +49,7 @@ fun JwstTransmissionSpectroscopyView(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Sinteza spectrală a atmosferei exoplanetare pe instrumentele NIRSpec și MIRI (0.6 - 12.0 µm). Calculează înălțimea de scară H, metrica TSM (Kempton et al. 2018) și amprentele spectrale de absorbție (H2O, CO2 la 4.3 µm și SO2 fotochimic la 4.05 µm).",
+                        stringResource(R.string.theory_jwst_wasp39_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

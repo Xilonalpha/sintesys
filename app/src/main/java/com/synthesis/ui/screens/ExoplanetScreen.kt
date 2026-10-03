@@ -1,5 +1,6 @@
 package com.synthesis.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -11,11 +12,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.ExoplanetCandidate
 import com.synthesis.domain.model.ExoplanetCatalogSource
@@ -33,11 +41,31 @@ fun ExoplanetScreen(
     onViewXilonDiscovery: () -> Unit = {},
     onViewDeepHunt: () -> Unit = {},
     onViewAdvancedLab: () -> Unit = {},
+    onViewTerraFrontier: () -> Unit = {},
     viewModel: ExoplanetViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val syncInfo by viewModel.syncInfo.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadSyncInfo(context)
+    }
+
+    val pullToRefreshState = rememberPullToRefreshState()
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            viewModel.refreshCandidates()
+        }
+    }
+    LaunchedEffect(isRefreshing) {
+        if (!isRefreshing) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -57,7 +85,10 @@ fun ExoplanetScreen(
                     IconButton(onClick = onViewDashboard) {
                         Icon(Icons.Default.Timeline, contentDescription = "Population Dashboard", tint = AccentCyan)
                     }
-                    IconButton(onClick = { viewModel.loadCandidates() }) {
+                    IconButton(
+                        onClick = { viewModel.refreshCandidates() },
+                        modifier = Modifier.testTag("refresh_archive_button")
+                    ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh Archive", tint = TextPrimary)
                     }
                 },
@@ -67,13 +98,19 @@ fun ExoplanetScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().background(DarkBackground).padding(padding)) {
 
-            // Compact Quick-Navigation Row (De-cluttered, replaces the 4 giant banners)
+            // Compact Quick-Navigation Row (Scrollable, 5 primary research hubs)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                AssistChip(
+                    onClick = onViewTerraFrontier,
+                    label = { Text("🌍 Terra Lab", color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold) },
+                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF0F2B48))
+                )
                 AssistChip(
                     onClick = onViewAdvancedLab,
                     label = { Text("🔬 Lab 2026", color = AccentGreen) },
@@ -94,6 +131,73 @@ fun ExoplanetScreen(
                     label = { Text("📊 Recharts", color = AccentCyan) },
                     colors = AssistChipDefaults.assistChipColors(containerColor = DarkSurface)
                 )
+            }
+
+            // PROMINENT CELESTIAL EPHEMERIS SYNC BANNER
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.6f)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🛰️", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "CELESTIAL EPHEMERIS SYNC",
+                                    color = AccentCyan,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = AccentGreen.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        "ONLINE",
+                                        color = AccentGreen,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                "Last Sync: ${syncInfo.formattedLastSync} • JPL Horizons & TAP",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                    FilledTonalButton(
+                        onClick = { viewModel.triggerEphemerisSync(context) },
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = AccentCyan.copy(alpha = 0.25f),
+                            contentColor = AccentCyan
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.height(30.dp).testTag("trigger_ephemeris_sync_button")
+                    ) {
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("SYNC", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
 
             // Search Bar
@@ -145,8 +249,11 @@ fun ExoplanetScreen(
                         },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = when (filter) {
-                                ExoplanetFilter.UNVETTED_NEW_WORLDS -> AccentGreen
+                                ExoplanetFilter.PHL_HABITABLE -> AccentGreen
                                 ExoplanetFilter.HABITABLE_ZONE -> AccentCyan
+                                ExoplanetFilter.UNVETTED_NEW_WORLDS -> Color(0xFFE040FB)
+                                ExoplanetFilter.CHEOPS_GAIA -> Color(0xFF00B0FF)
+                                ExoplanetFilter.KEPLER -> Color(0xFFFF9100)
                                 else -> AccentAmber
                             },
                             containerColor = DarkSurface
@@ -184,74 +291,90 @@ fun ExoplanetScreen(
                 )
             }
 
-            // Content Area
-            when (val state = uiState) {
-                ExoplanetUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = AccentCyan)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Querying multi-catalog NASA TAP database...", color = TextSecondary)
-                            Text("Connecting TESS, Kepler KOI, K2 & Confirmed archives", color = TextSecondary.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-                is ExoplanetUiState.Error -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                            Text("Could not reach archive endpoints", color = AccentRed, style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(state.message, color = TextSecondary, style = MaterialTheme.typography.labelMedium)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = { viewModel.loadCandidates() },
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan)
-                            ) {
-                                Text("Retry Connection", color = DarkBackground)
+            // Content Area with Pull-To-Refresh
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                    .testTag("pull_to_refresh_box")
+            ) {
+                when (val state = uiState) {
+                    ExoplanetUiState.Loading -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = AccentCyan)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("Querying multi-catalog NASA TAP database...", color = TextSecondary)
+                                Text("Connecting TESS, Kepler KOI, K2 & Confirmed archives", color = TextSecondary.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
-                }
-                is ExoplanetUiState.Success -> {
-                    val displayed = state.displayedCandidates
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "${displayed.size} candidates shown (${state.allCount} loaded)",
-                                    color = TextSecondary,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                if (state.unvettedCount > 0) {
+                    is ExoplanetUiState.Error -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                                Text("Could not reach archive endpoints", color = AccentRed, style = MaterialTheme.typography.titleMedium)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(state.message, color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.loadCandidates() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan)
+                                ) {
+                                    Text("Retry Connection", color = DarkBackground)
+                                }
+                            }
+                        }
+                    }
+                    is ExoplanetUiState.Success -> {
+                        val displayed = state.displayedCandidates
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
-                                        "${state.unvettedCount} unvetted signals",
-                                        color = AccentGreen,
+                                        "${displayed.size} candidates shown (${state.allCount} loaded)",
+                                        color = TextSecondary,
                                         style = MaterialTheme.typography.labelMedium
                                     )
+                                    if (state.unvettedCount > 0) {
+                                        Text(
+                                            "${state.unvettedCount} unvetted signals",
+                                            color = AccentGreen,
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        items(displayed, key = { it.toiId }) { candidate ->
-                            ExoplanetCandidateCard(candidate)
-                        }
+                            items(displayed, key = { it.toiId }) { candidate ->
+                                ExoplanetCandidateCard(candidate)
+                            }
 
-                        if (displayed.isEmpty()) {
-                            item {
-                                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                                    Text("No exoplanets match your current search or filter.", color = TextSecondary)
+                            if (displayed.isEmpty()) {
+                                item {
+                                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                                        Text("No exoplanets match your current search or filter.", color = TextSecondary)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                PullToRefreshContainer(
+                    state = pullToRefreshState,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .testTag("pull_to_refresh_indicator"),
+                    containerColor = Color(0xFF0F172A),
+                    contentColor = AccentCyan
+                )
             }
         }
     }

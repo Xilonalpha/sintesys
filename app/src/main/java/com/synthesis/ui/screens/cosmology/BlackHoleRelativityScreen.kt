@@ -19,9 +19,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.synthesis.R
 import com.synthesis.domain.model.cosmology.BlackHoleTarget
 import com.synthesis.domain.model.cosmology.RelativisticBlackHoleProfile
 import com.synthesis.engine.cosmology.BlackHoleRelativityEngine
@@ -59,7 +61,7 @@ fun BlackHoleRelativityScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "🕳️ GĂURI NEGRE & RELATIVITATE GENERALĂ",
+                            "🕳️ " + stringResource(R.string.theory_kerr_title).uppercase(),
                             color = AccentMagenta,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
@@ -79,7 +81,7 @@ fun BlackHoleRelativityScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        "Rezolvă metrica Kerr a găurilor negre în rotație: Orizontul Evenimentelor, Ergosfera Penrose, Sfera de Fotoni, ISCO și Dilatarea Gravitațională a Timpului.",
+                        stringResource(R.string.theory_kerr_desc),
                         color = TextSecondary,
                         style = MaterialTheme.typography.bodySmall
                     )

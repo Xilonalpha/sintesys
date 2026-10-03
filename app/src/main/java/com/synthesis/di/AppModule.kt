@@ -33,6 +33,10 @@ object AppModule {
         database.xilonDiscoveryDao()
 
     @Provides @Singleton
+    fun provideCachedExoplanetDao(database: SynthesisDatabase): com.synthesis.data.local.dao.CachedExoplanetDao =
+        database.cachedExoplanetDao()
+
+    @Provides @Singleton
     fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         val cacheSize = 50L * 1024 * 1024 // 50 MB HTTP Cache

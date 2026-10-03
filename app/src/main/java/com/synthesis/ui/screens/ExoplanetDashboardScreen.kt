@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -216,15 +217,24 @@ fun AnomalyCandidateItem(candidate: ExoplanetCandidate) {
                     Text(candidate.ticId, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
                 }
 
+                val anomalyLabel = candidate.anomalyType ?: "ANOMALY"
+                val badgeColor = when {
+                    anomalyLabel.contains("Habitable", ignoreCase = true) || anomalyLabel.contains("Temperate", ignoreCase = true) -> AccentGreen
+                    anomalyLabel.contains("Desert", ignoreCase = true) || anomalyLabel.contains("Super-Puff", ignoreCase = true) -> AccentRed
+                    anomalyLabel.contains("Jupiter", ignoreCase = true) || anomalyLabel.contains("USP", ignoreCase = true) || anomalyLabel.contains("Period", ignoreCase = true) -> AccentAmber
+                    else -> AccentCyan
+                }
+
                 Surface(
-                    color = AccentRed.copy(alpha = 0.2f),
+                    color = badgeColor.copy(alpha = 0.2f),
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        candidate.anomalyType ?: "ANOMALY",
-                        color = AccentRed,
+                        anomalyLabel,
+                        color = badgeColor,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
