@@ -68,8 +68,9 @@ class InvestigationViewModel @Inject constructor(
     private val _impactAssessment = MutableStateFlow<ImpactIpEngine.ImpactAssessment?>(null)
     val impactAssessment: StateFlow<ImpactIpEngine.ImpactAssessment?> = _impactAssessment.asStateFlow()
 
-    private val _discoveries = MutableStateFlow<List<Discovery>>(emptyList())
-    val discoveries: StateFlow<List<Discovery>> = _discoveries.asStateFlow()
+    // Reactive Flow stream from Room database, persisting discoveries locally
+    val discoveries: StateFlow<List<Discovery>> = repository.getDiscoveries(investigationId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         viewModelScope.launch { sourceOrchestrator.runHealthChecks() }
@@ -297,7 +298,9 @@ class InvestigationViewModel @Inject constructor(
             // Discovery Engine
             _logs.value = _logs.value + "Scanning for hidden cross-domain patterns..."
             val generatedDiscoveries = discoveryEngine.generateDiscoveries(investigationId, allObservations)
-            _discoveries.value = generatedDiscoveries
+            if (generatedDiscoveries.isNotEmpty()) {
+                repository.saveDiscoveries(generatedDiscoveries)
+            }
             _logs.value = _logs.value + "Discoveries: ${generatedDiscoveries.size}" +
                 (generatedDiscoveries.firstOrNull()?.let { " (top estimated value: $${it.estimatedValueUsd})" } ?: "")
 

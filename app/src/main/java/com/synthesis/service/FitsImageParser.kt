@@ -118,7 +118,11 @@ class FitsImageParser @Inject constructor() {
         )
     }
 
-    fun parseFitsImage(bytes: ByteArray): FitsImageData {
+    fun parseFitsImage(
+        bytes: ByteArray,
+        applySnrFilter: Boolean = true,
+        snrThreshold: Float = 3.0f
+    ): FitsImageData {
         val meta = parseFitsHeader(bytes)
         val numPixels = meta.width * meta.height
         if (numPixels <= 0) {
@@ -159,7 +163,140 @@ class FitsImageParser @Inject constructor() {
             }
         }
 
-        return FitsImageData(metadata = meta, pixels = pixels)
+        val processedPixels = if (applySnrFilter) {
+            applySnrFilterToBuffer(
+                pixels = pixels,
+                width = meta.width,
+                height = meta.height,
+                snrThreshold = snrThreshold
+            )
+        } else {
+            pixels
+        }
+
+        return FitsImageData(metadata = meta, pixels = processedPixels)
+    }
+
+    /**
+     * Atmospheric Interference & Scintillation SNR Filter Preprocessing.
+     * Computes the local robust background (median & noise sigma) and suppresses
+     * atmospheric interference where SNR is below the specified detection floor.
+     */
+    fun applyAtmosphericSnrFilter(
+        imageData: FitsImageData,
+        snrThreshold: Float = 3.0f,
+        gridSize: Int = 32,
+        clipCosmicRays: Boolean = true
+    ): FitsImageData {
+        val filtered = applySnrFilterToBuffer(
+            pixels = imageData.pixels,
+            width = imageData.metadata.width,
+            height = imageData.metadata.height,
+            snrThreshold = snrThreshold,
+            gridSize = gridSize,
+            clipCosmicRays = clipCosmicRays
+        )
+        return FitsImageData(metadata = imageData.metadata, pixels = filtered)
+    }
+
+    /**
+     * Core SNR filtering algorithm on raw 2D pixel float buffer.
+     */
+    fun applySnrFilterToBuffer(
+        pixels: FloatArray,
+        width: Int,
+        height: Int,
+        snrThreshold: Float = 3.0f,
+        gridSize: Int = 32,
+        clipCosmicRays: Boolean = true
+    ): FloatArray {
+        val n = width * height
+        if (n <= 0 || pixels.size < n) return pixels
+
+        val filtered = FloatArray(n)
+
+        // 1. Estimate local background median & noise floor (MAD) on spatial mesh
+        val gridCols = (width / gridSize).coerceAtLeast(1)
+        val gridRows = (height / gridSize).coerceAtLeast(1)
+        val bgGrid = FloatArray(gridCols * gridRows)
+        val sigmaGrid = FloatArray(gridCols * gridRows)
+
+        for (gy in 0 until gridRows) {
+            val yStart = gy * height / gridRows
+            val yEnd = (gy + 1) * height / gridRows
+            for (gx in 0 until gridCols) {
+                val xStart = gx * width / gridCols
+                val xEnd = (gx + 1) * width / gridCols
+
+                val cellPixels = mutableListOf<Float>()
+                for (y in yStart until yEnd step 2) {
+                    val rowOffset = y * width
+                    for (x in xStart until xEnd step 2) {
+                        cellPixels.add(pixels[rowOffset + x])
+                    }
+                }
+                cellPixels.sort()
+                val cellCount = cellPixels.size
+                if (cellCount > 0) {
+                    val med = cellPixels[cellCount / 2]
+                    val q25 = cellPixels[cellCount / 4]
+                    val q75 = cellPixels[(cellCount * 3) / 4]
+                    val sigma = ((q75 - q25) / 1.349f).coerceAtLeast(1.0f)
+                    val gIdx = gy * gridCols + gx
+                    bgGrid[gIdx] = med
+                    sigmaGrid[gIdx] = sigma
+                }
+            }
+        }
+
+        // 2. Filter pixels against atmospheric noise floor & scintillation
+        for (y in 0 until height) {
+            val gy = (y * gridRows / height).coerceIn(0, gridRows - 1)
+            val rowOffset = y * width
+            for (x in 0 until width) {
+                val gx = (x * gridCols / width).coerceIn(0, gridCols - 1)
+                val gIdx = gy * gridCols + gx
+                val bg = bgGrid[gIdx]
+                val sigma = sigmaGrid[gIdx]
+
+                val rawVal = pixels[rowOffset + x]
+                val netSignal = rawVal - bg
+                val pixelSnr = netSignal / sigma
+
+                // Cosmic ray rejection: single-pixel extreme spikes (SNR > 50 sigma, narrow FWHM)
+                if (clipCosmicRays && pixelSnr > 50.0f) {
+                    var neighborSum = 0f
+                    var neighborCount = 0
+                    for (dy in -1..1) {
+                        for (dx in -1..1) {
+                            if (dx == 0 && dy == 0) continue
+                            val nx = x + dx
+                            val ny = y + dy
+                            if (nx in 0 until width && ny in 0 until height) {
+                                neighborSum += pixels[ny * width + nx]
+                                neighborCount++
+                            }
+                        }
+                    }
+                    val avgNeighbor = if (neighborCount > 0) neighborSum / neighborCount else bg
+                    if (rawVal > avgNeighbor * 3.5f) {
+                        filtered[rowOffset + x] = avgNeighbor
+                        continue
+                    }
+                }
+
+                // Atmospheric noise filtering:
+                // Pixels with SNR below the threshold are dominated by atmospheric seeing/turbulence and sky glow.
+                if (pixelSnr < snrThreshold) {
+                    val attenuation = (pixelSnr / snrThreshold).coerceAtLeast(0f).let { it * it }
+                    filtered[rowOffset + x] = bg + (netSignal * attenuation)
+                } else {
+                    filtered[rowOffset + x] = rawVal
+                }
+            }
+        }
+
+        return filtered
     }
 
     /**

@@ -45,6 +45,8 @@
     <string name="btn_emergency_stop">EMERGENCY STOP (:Q#)</string>
     <string name="btn_park_mount">PARK MOUNT (HOME)</string>
     <string name="lbl_tracking">Sidereal Tracking</string>
+    <string name="notif_usb_detached_title">Telescop Deconectat Fizic</string>
+    <string name="notif_usb_detached_desc">Cablul USB al monturii a fost deconectat. Motoarele și comenzile GoTo au fost oprite automat pentru protecție.</string>
 
     <!-- Runtime Permissions Dialogs -->
     <string name="perm_camera_title">Permisiune Cameră Necesară pentru AR</string>

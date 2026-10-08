@@ -41,6 +41,7 @@ fun HomeScreen(
     onViewDeepHunt: () -> Unit = {},
     onViewAdvancedLab: () -> Unit = {},
     onViewTerraFrontier: () -> Unit = {},
+    onViewResearchArchive: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val investigations by viewModel.investigations.collectAsState()
@@ -112,6 +113,12 @@ fun HomeScreen(
                         modifier = Modifier.testTag("top_xilon_button")
                     ) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = "Xilon Discovery", tint = AccentCyan)
+                    }
+                    IconButton(
+                        onClick = onViewResearchArchive,
+                        modifier = Modifier.testTag("top_archive_button")
+                    ) {
+                        Icon(Icons.Default.Inventory2, contentDescription = "Arhivă Cercetări", tint = AccentGreen)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -330,6 +337,17 @@ fun HomeScreen(
                     subtitle = "Oceane Hadale, Mantaua Terrei & Anomalia SAA",
                     accentColor = Color(0xFF00E5FF),
                     onClick = onViewTerraFrontier
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                ModuleQuickCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = "💾",
+                    title = "ARHIVĂ CERCETĂRI (ROOM DATABASE)",
+                    subtitle = "Bază de Date Locală Offline: Sinteze JWST, Roman & PLATO",
+                    accentColor = AccentGreen,
+                    onClick = onViewResearchArchive
                 )
             }
 

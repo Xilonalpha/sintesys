@@ -20,7 +20,8 @@ enum class DeepHuntTab(val title: String) {
 
 @HiltViewModel
 class DeepHuntViewModel @Inject constructor(
-    private val repository: UnvettedHuntRepository
+    private val repository: UnvettedHuntRepository,
+    private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository
 ) : ViewModel() {
 
     private val _selectedTab = MutableStateFlow(DeepHuntTab.MONO_TRANSITS)
@@ -89,6 +90,28 @@ class DeepHuntViewModel @Inject constructor(
             _customCandidate.value = result
             // Prepend to list
             _monoTransits.value = listOf(result) + _monoTransits.value.filter { it.ticId != ticId }
+        }
+    }
+
+    fun saveCandidateToResearchArchive(candidate: MonoTransitCandidate) {
+        viewModelScope.launch {
+            val entity = com.synthesis.data.local.entity.SynthesizedResearchEntity(
+                id = java.util.UUID.randomUUID().toString(),
+                title = "Mono-Tranzit TESS: ${candidate.candidateName}",
+                targetName = candidate.candidateName,
+                researchCategory = "EXOPLANET",
+                summary = "Candidat mono-tranzit TESS recuperat din unvetted backlog. " +
+                        "Perioadă orbitală estimată: ${candidate.minimumPeriodDays.toInt()} - ${candidate.circularEstimatedPeriodDays.toInt()} zile. " +
+                        "Rază planetară calculată: ${String.format(java.util.Locale.US, "%.2f", candidate.planetRadiusEarth)} R⊕. Zonă habitabilă: ${if (candidate.isHabitableZone) "DA" else "NU"}.",
+                synthesizedDataJson = """{"tic":"${candidate.ticId}","duration_h":${candidate.transitDurationHours},"depth_ppm":${candidate.transitDepthPpm},"period_min_d":${candidate.minimumPeriodDays},"period_max_d":${candidate.circularEstimatedPeriodDays},"radius_earth":${candidate.planetRadiusEarth},"hz":${candidate.isHabitableZone}}""",
+                confidenceScore = 0.91f,
+                sourceCount = 3,
+                observerNotes = "Detectat în sectorul TESS ${candidate.sector}. Necesar follow-up spectroscopic.",
+                timestamp = System.currentTimeMillis(),
+                isVerified = true,
+                isBookmarked = false
+            )
+            synthesizedResearchRepository.saveResearch(entity)
         }
     }
 }

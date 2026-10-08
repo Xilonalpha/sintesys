@@ -99,6 +99,25 @@ class SynthesisRepository @Inject constructor(
         database.evidenceNodeDao().insert(node.toEntity())
     }
 
+    // Discoveries Local Room Persistence
+    fun getDiscoveries(investigationId: String): Flow<List<Discovery>> =
+        database.discoveryDao().getByInvestigation(investigationId).map { list -> list.map { it.toDomain() } }
+
+    fun getAllDiscoveries(): Flow<List<Discovery>> =
+        database.discoveryDao().getAll().map { list -> list.map { it.toDomain() } }
+
+    suspend fun saveDiscovery(discovery: Discovery) {
+        database.discoveryDao().insert(discovery.toEntity())
+    }
+
+    suspend fun saveDiscoveries(discoveries: List<Discovery>) {
+        database.discoveryDao().insertAll(discoveries.map { it.toEntity() })
+    }
+
+    suspend fun deleteDiscoveryById(id: String) {
+        database.discoveryDao().deleteById(id)
+    }
+
     // ==================== REMOTE DATA - REAL APIs ====================
 
     // 1. NASA NEO

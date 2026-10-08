@@ -51,23 +51,49 @@ class ArSkyTrackerService @Inject constructor(
 ) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-    private val rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ORIENTATION)
+
+    // Modern rotation vector sensors (Android 14/15 primary)
+    private val rotationVectorSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+    private val geomagneticSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
+    
+    // Hardware fallback sensors in case rotation vector hardware is missing on entry-level hardware
+    private val accelerometerSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val magneticFieldSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
 
     private val _deviceOrientation = MutableStateFlow(DeviceSkyOrientation())
     val deviceOrientation: StateFlow<DeviceSkyOrientation> = _deviceOrientation.asStateFlow()
 
+    // 9-element rotation matrices and 3-element orientation angles
     private val rotationMatrix = FloatArray(9)
+    private val remappedMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
 
+    // Fallback sensor reading caches
+    private val gravityValues = FloatArray(3)
+    private val geomagneticValues = FloatArray(3)
+    private var hasGravity = false
+    private var hasGeomagnetic = false
+
     fun startTracking() {
-        rotationSensor?.let {
-            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        val manager = sensorManager ?: return
+        when {
+            rotationVectorSensor != null -> {
+                manager.registerListener(this, rotationVectorSensor, SensorManager.SENSOR_DELAY_UI)
+            }
+            geomagneticSensor != null -> {
+                manager.registerListener(this, geomagneticSensor, SensorManager.SENSOR_DELAY_UI)
+            }
+            accelerometerSensor != null && magneticFieldSensor != null -> {
+                manager.registerListener(this, accelerometerSensor, SensorManager.SENSOR_DELAY_UI)
+                manager.registerListener(this, magneticFieldSensor, SensorManager.SENSOR_DELAY_UI)
+            }
         }
     }
 
     fun stopTracking() {
         sensorManager?.unregisterListener(this)
+        hasGravity = false
+        hasGeomagnetic = false
     }
 
     fun setManualOrientation(azimuth: Double, altitude: Double) {
@@ -87,9 +113,42 @@ class ArSkyTrackerService @Inject constructor(
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event == null) return
-        if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+
+        var hasValidMatrix = false
+
+        if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR ||
+            event.sensor.type == Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR
+        ) {
+            // Modern Android 14/15 approach: Convert rotation vector quaternion into rotation matrix
             SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
-            SensorManager.getOrientation(rotationMatrix, orientationAngles)
+            hasValidMatrix = true
+        } else if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, gravityValues, 0, 3)
+            hasGravity = true
+            if (hasGeomagnetic) {
+                // Compute rotation matrix using modern getRotationMatrix API
+                hasValidMatrix = SensorManager.getRotationMatrix(rotationMatrix, null, gravityValues, geomagneticValues)
+            }
+        } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
+            System.arraycopy(event.values, 0, geomagneticValues, 0, 3)
+            hasGeomagnetic = true
+            if (hasGravity) {
+                // Compute rotation matrix using modern getRotationMatrix API
+                hasValidMatrix = SensorManager.getRotationMatrix(rotationMatrix, null, gravityValues, geomagneticValues)
+            }
+        }
+
+        if (hasValidMatrix) {
+            // Remap coordinate system for camera AR sky pointing (X axis remains East, Y mapped to Z axis up)
+            SensorManager.remapCoordinateSystem(
+                rotationMatrix,
+                SensorManager.AXIS_X,
+                SensorManager.AXIS_Z,
+                remappedMatrix
+            )
+
+            // Extract azimuth, pitch, and roll in radians using modern SensorManager.getOrientation
+            SensorManager.getOrientation(remappedMatrix, orientationAngles)
 
             val azimuthRad = orientationAngles[0]
             val pitchRad = orientationAngles[1]
@@ -98,22 +157,14 @@ class ArSkyTrackerService @Inject constructor(
             var azimuthDeg = Math.toDegrees(azimuthRad.toDouble())
             if (azimuthDeg < 0) azimuthDeg += 360.0
 
-            // Pitch is tilt towards sky (negative pitch in Android = pointing up)
-            val altitudePitchDeg = -Math.toDegrees(pitchRad.toDouble())
+            // Pitch represents elevation angle towards the celestial sphere
+            val altitudePitchDeg = Math.toDegrees(pitchRad.toDouble()).coerceIn(-90.0, 90.0)
             val rollDeg = Math.toDegrees(rollRad.toDouble())
 
             _deviceOrientation.value = _deviceOrientation.value.copy(
                 compassAzimuthDeg = azimuthDeg,
                 altitudePitchDeg = altitudePitchDeg,
                 rollDeg = rollDeg,
-                sensorActive = true
-            )
-        } else if (event.sensor.type == Sensor.TYPE_ORIENTATION) {
-            val az = event.values[0].toDouble()
-            val pitch = -event.values[1].toDouble()
-            _deviceOrientation.value = _deviceOrientation.value.copy(
-                compassAzimuthDeg = az,
-                altitudePitchDeg = pitch,
                 sensorActive = true
             )
         }

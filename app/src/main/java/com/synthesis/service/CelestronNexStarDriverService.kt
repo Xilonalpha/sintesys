@@ -1,11 +1,20 @@
 package com.synthesis.service
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.synthesis.MainActivity
+import com.synthesis.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,6 +90,11 @@ data class NexStarTelemetry(
 class CelestronNexStarDriverService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        const val USB_NOTIFICATION_CHANNEL_ID = "synthesis_telescope_hardware_channel"
+        const val USB_DISCONNECT_NOTIFICATION_ID = 4203
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val _telemetry = MutableStateFlow(NexStarTelemetry())
@@ -96,6 +110,84 @@ class CelestronNexStarDriverService @Inject constructor(
 
     private var pollingJob: Job? = null
     private var slewJob: Job? = null
+
+    private val usbReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent?.action == UsbManager.ACTION_USB_DEVICE_DETACHED) {
+                if (_telemetry.value.connectionMode == NexStarConnectionMode.USB_SERIAL || usbConnection != null || _telemetry.value.isConnected) {
+                    // 1. Cancel pending slew jobs immediately
+                    slewJob?.cancel()
+
+                    // 2. Disconnect and update isConnected = false
+                    disconnect()
+
+                    // 3. Log alert
+                    val alertMessage = "ALERTA HARDWARE: Cablul USB NexStar+ a fost deconectat fizic din dispozitiv! Motoarele au fost oprite."
+                    addLog(alertMessage)
+
+                    // 4. Trigger user-facing notification
+                    triggerUsbDetachedNotification()
+                }
+            }
+        }
+    }
+
+    init {
+        createNotificationChannel()
+        try {
+            val filter = android.content.IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(usbReceiver, filter)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Alerte Hardware Montură Telescop"
+            val descriptionText = "Notificări de siguranță la deconectarea cablului USB sau întreruperea comunicării seriale cu montura."
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(USB_NOTIFICATION_CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+                enableVibration(true)
+            }
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+
+    private fun triggerUsbDetachedNotification() {
+        try {
+            val title = context.getString(R.string.notif_usb_detached_title)
+            val desc = context.getString(R.string.notif_usb_detached_desc)
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            val builder = NotificationCompat.Builder(context, USB_NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setContentTitle(title)
+                .setContentText(desc)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(desc))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.notify(USB_DISCONNECT_NOTIFICATION_ID, builder.build())
+        } catch (_: SecurityException) {
+            // Android 13+ permission POST_NOTIFICATIONS may not be granted by user yet
+        } catch (_: Exception) {}
+    }
 
     // -------------------------------------------------------------
     // Connection Management
@@ -123,39 +215,93 @@ class CelestronNexStarDriverService @Inject constructor(
         val deviceList = usbManager.deviceList
 
         if (deviceList.isEmpty()) {
-            addLog("Niciun dispozitiv USB detectat. Asigură-te că adaptorul USB-OTG este introdus la baza telecomenzii NexStar+.")
+            addLog("Niciun dispozitiv USB detectat. Asigură-te că adaptorul USB-OTG este introdus la baza telecomenzii NexStar+ și opțiunea OTG este activată în telefon.")
             return false
         }
 
-        val device = deviceList.values.firstOrNull() ?: return false
+        // Detect if USB Hub is present
+        val hasHub = deviceList.values.any { it.deviceClass == UsbConstants.USB_CLASS_HUB }
+        if (hasHub) {
+            addLog("Info: Detectat USB Hub. Se filtrează dispozitivul serial al telecomenzii NexStar+...")
+        }
+
+        // Find genuine UART/Serial device, skipping Hub ICs
+        val device = deviceList.values.firstOrNull { dev ->
+            val vid = dev.vendorId
+            val isKnownUart = vid == 0x0403 || vid == 0x10C4 || vid == 0x1A86 || vid == 0x067B || vid == 0x03EB
+            val isNotHub = dev.deviceClass != UsbConstants.USB_CLASS_HUB
+            val hasSerialInterface = (0 until dev.interfaceCount).any { idx ->
+                val iface = dev.getInterface(idx)
+                iface.interfaceClass == UsbConstants.USB_CLASS_COMM ||
+                iface.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
+                iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC
+            }
+            isNotHub && (isKnownUart || hasSerialInterface)
+        } ?: deviceList.values.firstOrNull { it.deviceClass != UsbConstants.USB_CLASS_HUB }
+
+        if (device == null) {
+            addLog("Eroare USB: A fost detectat doar un Hub USB. Conectează un cablu direct USB-OTG între telefon și telecomanda NexStar+, fără hub!")
+            return false
+        }
+
+        // Request runtime permission if needed
+        if (!usbManager.hasPermission(device)) {
+            addLog("Solicitare permisiune USB Android pentru ${device.deviceName} (VID: 0x${Integer.toHexString(device.vendorId)}). Apasă 'Permite' pe ecran!")
+            try {
+                val permissionIntent = PendingIntent.getBroadcast(
+                    context,
+                    0,
+                    Intent("com.synthesis.USB_PERMISSION"),
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                usbManager.requestPermission(device, permissionIntent)
+            } catch (e: Exception) {
+                addLog("Eroare cerere permisiune USB: ${e.message}")
+            }
+            return false
+        }
+
         addLog("Dispozitiv USB detectat: ${device.deviceName} (VID: 0x${Integer.toHexString(device.vendorId)} PID: 0x${Integer.toHexString(device.productId)}).")
 
         try {
             val connection = usbManager.openDevice(device) ?: run {
-                addLog("Permisiune USB refuzată sau conexiune eșuată.")
+                addLog("Permisiune USB refuzată sau conexiune fizică eșuată.")
                 return false
             }
 
-            if (device.interfaceCount > 0) {
-                val usbInterface = device.getInterface(0)
-                connection.claimInterface(usbInterface, true)
+            var epOut: UsbEndpoint? = null
+            var epIn: UsbEndpoint? = null
+            var claimed = false
 
-                var epOut: UsbEndpoint? = null
-                var epIn: UsbEndpoint? = null
-                for (i in 0 until usbInterface.endpointCount) {
-                    val ep = usbInterface.getEndpoint(i)
-                    if (ep.direction == UsbConstants.USB_DIR_OUT) epOut = ep
-                    if (ep.direction == UsbConstants.USB_DIR_IN) epIn = ep
+            for (i in 0 until device.interfaceCount) {
+                val usbInterface = device.getInterface(i)
+                if (connection.claimInterface(usbInterface, true)) {
+                    for (j in 0 until usbInterface.endpointCount) {
+                        val ep = usbInterface.getEndpoint(j)
+                        if (ep.direction == UsbConstants.USB_DIR_OUT && epOut == null) epOut = ep
+                        if (ep.direction == UsbConstants.USB_DIR_IN && epIn == null) epIn = ep
+                    }
+                    if (epOut != null) {
+                        claimed = true
+                        break
+                    }
                 }
-
-                usbConnection = connection
-                usbEndpointOut = epOut
-                usbEndpointIn = epIn
-
-                // Configure Hardware UART chip parameters (Baud 9600, 8N1)
-                val chip = configureSerialUart(connection, device.vendorId, device.productId)
-                addLog("NexStar+ UART Serial configurat: $chip @ 9600 bps, 8N1.")
             }
+
+            if (!claimed || epOut == null) {
+                connection.close()
+                addLog("Eroare: Nu s-a putut aloca interfața serială NexStar+ (lipsește canalul OUT de date).")
+                return false
+            }
+
+            usbConnection = connection
+            usbEndpointOut = epOut
+            usbEndpointIn = epIn
+
+            // Configure Hardware UART chip parameters (Baud 9600, 8N1)
+            val chip = configureSerialUart(connection, device.vendorId, device.productId)
+            addLog("NexStar+ UART Serial configurat: $chip @ 9600 bps, 8N1.")
+            addLog("Important: Telecomanda NexStar+ trebuie să fie inițializată și aliniată la cer (SkyAlign / 2-Star Align) pentru ca comenzile GoTo să fie executate de motoare.")
 
             _telemetry.value = _telemetry.value.copy(
                 isConnected = true,

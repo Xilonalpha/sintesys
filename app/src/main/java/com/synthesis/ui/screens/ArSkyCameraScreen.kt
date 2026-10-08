@@ -2,6 +2,7 @@ package com.synthesis.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -146,6 +149,10 @@ fun ArSkyCameraScreen(
         )
     }
 
+    BackHandler {
+        onNavigateBack()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -157,7 +164,7 @@ fun ArSkyCameraScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
                 actions = {
@@ -329,7 +336,7 @@ fun ArSkyCameraScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    if (target.deltaAzDeg < 0) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+                                    if (target.deltaAzDeg < 0) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = null,
                                     tint = AccentAmber,
                                     modifier = Modifier.size(16.dp)

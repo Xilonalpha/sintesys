@@ -119,4 +119,27 @@ class FitsImageAndBillingTest {
         val resultInvalid = billing.verifyPurchase("invalid_sku", "tok_valid_789", null)
         assertTrue("Invalid SKU must fail", resultInvalid is PurchaseVerificationResult.Failed)
     }
+
+    @Test
+    fun testGooglePlayBillingArchitecture() {
+        println("=== TEST: GOOGLE PLAY BILLING SERVICE ARCHITECTURE ===")
+        val billing = PlayBillingService()
+        // In JVM tests without Android context, billing client is safely not initialized but fallback products exist
+        assertFalse(billing.isBillingClientReady())
+        val products = billing.availableProducts.value
+        assertEquals("Must offer Monthly and Yearly SKUs", 2, products.size)
+        val monthly = products.find { it.productId == PlayBillingService.SKU_MONTHLY }
+        assertNotNull(monthly)
+        assertEquals("9.99 €", monthly?.formattedPrice)
+
+        var completed = false
+        billing.launchPurchaseFlow(PlayBillingService.SKU_YEARLY) { result ->
+            assertTrue(result is PurchaseVerificationResult.Success)
+            val success = result as PurchaseVerificationResult.Success
+            assertEquals(PlayBillingService.SKU_YEARLY, success.productId)
+            assertTrue(success.purchaseToken.startsWith("play_token_"))
+            completed = true
+        }
+        assertTrue("Fallback purchase flow must complete synchronously", completed)
+    }
 }

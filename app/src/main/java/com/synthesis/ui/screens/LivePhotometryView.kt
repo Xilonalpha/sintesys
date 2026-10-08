@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.synthesis.domain.model.exoplanet.LiveObservationSession
+import com.synthesis.domain.model.exoplanet.PeriodicTransitDetectionResult
+import com.synthesis.ui.components.exoplanet.PeriodicTransitAnalysisCard
 import com.synthesis.ui.theme.*
 import kotlin.math.roundToInt
 
@@ -34,7 +36,10 @@ fun LivePhotometryView(
     onUpdateObserver: (String, String, String, String, String, String, String, Double, String, Double) -> Unit,
     onReset: () -> Unit,
     onGenerateEtd: () -> Unit,
-    onGenerateAavso: () -> Unit
+    onGenerateAavso: () -> Unit,
+    onOpenVisionEngine: () -> Unit = {},
+    periodicResult: PeriodicTransitDetectionResult? = null,
+    onRunPeriodicBlsScan: (Double?, Double?, Double, Double) -> Unit = { _, _, _, _ -> }
 ) {
     var showImportDialog by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
@@ -142,29 +147,42 @@ fun LivePhotometryView(
 
         // BUTOANE DE IMPORT ȘI CONFIGURARE REALĂ
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { showImportDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black),
-                    modifier = Modifier.weight(1.2f),
+                    onClick = onOpenVisionEngine,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = Color.Black),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("ÎNCARCĂ DATE REALE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("DESCHIDE CAMERA TELESCOP & ANALIZĂ FITS LIVE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedButton(
-                    onClick = { showConfigDialog = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("SETĂRI OBSERVATOR", fontSize = 11.sp, color = Color.White)
+                    Button(
+                        onClick = { showImportDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black),
+                        modifier = Modifier.weight(1.2f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ÎNCARCĂ DATE REALE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = { showConfigDialog = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("SETĂRI OBSERVATOR", fontSize = 11.sp, color = Color.White)
+                    }
                 }
             }
         }
@@ -311,6 +329,15 @@ fun LivePhotometryView(
                     }
                 }
             }
+        }
+
+        // ANALIZĂ PERIODICITATE BLS & CURBĂ PLIATĂ ÎN FAZĂ
+        item {
+            PeriodicTransitAnalysisCard(
+                result = periodicResult,
+                onRunScan = onRunPeriodicBlsScan,
+                dataPoints = session.dataPoints
+            )
         }
 
         // SECȚIUNE GENERARE RAPORT OFICIAL DE DESCOPERIRE

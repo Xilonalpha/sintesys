@@ -30,7 +30,8 @@ fun SmartScopeView(
     onDisconnect: () -> Unit,
     onSlewTarget: (LiveTransitTarget) -> Unit,
     onStartSequence: (Double, Int, String) -> Unit,
-    onStopSequence: () -> Unit
+    onStopSequence: () -> Unit,
+    onOpenVisionEngine: () -> Unit = {}
 ) {
     var selectedModel by remember { mutableStateOf(telemetry.model) }
     var ipInput by remember { mutableStateOf(telemetry.ipAddress) }
@@ -249,6 +250,17 @@ fun SmartScopeView(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("OPREȘTE ACHIZIȚIA CADRELOR", fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = onOpenVisionEngine,
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = Color.Black),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("DESCHIDE FLUXUL VIDEO & ANALIZĂ FITS", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

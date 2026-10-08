@@ -1,11 +1,20 @@
 package com.synthesis.service
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.synthesis.MainActivity
+import com.synthesis.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,6 +68,11 @@ data class MountTelemetry(
 class TelescopeMotorControlService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        const val USB_NOTIFICATION_CHANNEL_ID = "synthesis_telescope_hardware_channel"
+        const val USB_DISCONNECT_NOTIFICATION_ID = 4202
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val _telemetry = MutableStateFlow(MountTelemetry())
@@ -71,6 +85,85 @@ class TelescopeMotorControlService @Inject constructor(
     private var usbEndpointOut: UsbEndpoint? = null
 
     private var slewJob: Job? = null
+
+    private val usbReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent?.action == UsbManager.ACTION_USB_DEVICE_DETACHED) {
+                // If connected via USB OTG or if there is an active USB connection
+                if (_telemetry.value.connectionMode == MountConnectionMode.USB_SERIAL_OTG || usbConnection != null || _telemetry.value.isConnected) {
+                    // 1. Cancel pending slew jobs immediately
+                    slewJob?.cancel()
+
+                    // 2. Disconnect and update isConnected = false
+                    disconnect()
+
+                    // 3. Log alert
+                    val alertMessage = "ALERTA HARDWARE: Cablul USB al monturii a fost deconectat fizic din dispozitiv! Motoarele au fost oprite."
+                    addLog(alertMessage)
+
+                    // 4. Trigger user-facing notification
+                    triggerUsbDetachedNotification()
+                }
+            }
+        }
+    }
+
+    init {
+        createNotificationChannel()
+        try {
+            val filter = android.content.IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(usbReceiver, filter)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Alerte Hardware Montură Telescop"
+            val descriptionText = "Notificări de siguranță la deconectarea cablului USB sau întreruperea comunicării seriale cu montura."
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(USB_NOTIFICATION_CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+                enableVibration(true)
+            }
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+
+    private fun triggerUsbDetachedNotification() {
+        try {
+            val title = context.getString(R.string.notif_usb_detached_title)
+            val desc = context.getString(R.string.notif_usb_detached_desc)
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            val builder = NotificationCompat.Builder(context, USB_NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setContentTitle(title)
+                .setContentText(desc)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(desc))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.notify(USB_DISCONNECT_NOTIFICATION_ID, builder.build())
+        } catch (_: SecurityException) {
+            // Android 13+ permission POST_NOTIFICATIONS may not be granted by user yet
+        } catch (_: Exception) {}
+    }
 
     fun connectSimulation() {
         disconnect()
@@ -90,47 +183,106 @@ class TelescopeMotorControlService @Inject constructor(
         val deviceList: Map<String, UsbDevice> = usbManager.deviceList
 
         if (deviceList.isEmpty()) {
-            addLog("Niciun dispozitiv USB detectat. Asigură-te că adaptorul USB-OTG este introdus și montura este pornită.")
+            addLog("Niciun dispozitiv USB detectat. Asigură-te că adaptorul USB-OTG este introdus, montura este pornită și opțiunea 'Conexiune OTG' din setările telefonului este activată.")
             return false
         }
 
-        val telescopeDevice = deviceList.values.firstOrNull()
-        if (telescopeDevice != null) {
-            addLog("Dispozitiv USB detectat: ${telescopeDevice.deviceName} (Vendor: ${telescopeDevice.vendorId}). Conectare port serial...")
-            try {
-                val connection = usbManager.openDevice(telescopeDevice)
-                if (connection != null && telescopeDevice.interfaceCount > 0) {
-                    val usbIf = telescopeDevice.getInterface(0)
-                    connection.claimInterface(usbIf, true)
-                    var epOut: UsbEndpoint? = null
-                    for (i in 0 until usbIf.endpointCount) {
-                        val ep = usbIf.getEndpoint(i)
-                        if (ep.direction == UsbConstants.USB_DIR_OUT) {
-                            epOut = ep
-                            break
-                        }
-                    }
-                    usbConnection = connection
-                    usbEndpointOut = epOut
-
-                    // Configure Hardware UART chip parameters (Baud 9600, 8N1)
-                    val chipName = configureUsbSerialChip(connection, telescopeDevice.vendorId, telescopeDevice.productId)
-                    addLog("Hardware Serial Line Configured: $chipName @ 9600 bps, 8N1.")
-                }
-            } catch (e: Exception) {
-                addLog("Eroare la deschiderea dispozitivului USB: ${e.message}")
-            }
-
-            _telemetry.value = _telemetry.value.copy(
-                isConnected = true,
-                connectionMode = MountConnectionMode.USB_SERIAL_OTG,
-                isParked = false,
-                isTracking = true,
-                lastExecutedCommand = "USB_SERIAL_PORT_OPEN (Baud 9600)"
-            )
-            return true
+        // 1. Detect if a USB Hub is present and log a warning
+        val hasHub = deviceList.values.any { it.deviceClass == UsbConstants.USB_CLASS_HUB }
+        if (hasHub) {
+            addLog("Info: Detectat USB Hub. Se caută adaptorul serial al monturii (FTDI/CP210x/CH340/Prolific)...")
         }
-        return false
+
+        // 2. Select the true UART serial adapter device, skipping USB Hub ICs
+        val serialDevice = deviceList.values.firstOrNull { dev ->
+            val vid = dev.vendorId
+            val isKnownUart = vid == 0x0403 || vid == 0x10C4 || vid == 0x1A86 || vid == 0x067B || vid == 0x03EB
+            val isNotHub = dev.deviceClass != UsbConstants.USB_CLASS_HUB
+            val hasSerialInterface = (0 until dev.interfaceCount).any { idx ->
+                val iface = dev.getInterface(idx)
+                iface.interfaceClass == UsbConstants.USB_CLASS_COMM ||
+                iface.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
+                iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC
+            }
+            isNotHub && (isKnownUart || hasSerialInterface)
+        } ?: deviceList.values.firstOrNull { it.deviceClass != UsbConstants.USB_CLASS_HUB }
+
+        if (serialDevice == null) {
+            addLog("Eroare USB: A fost detectat doar un Hub USB, dar niciun telescop sau port serial. Conectează un cablu USB-OTG DIRECT între telefon și telecomandă, fără hub!")
+            return false
+        }
+
+        // 3. Check and request Android USB runtime permission
+        if (!usbManager.hasPermission(serialDevice)) {
+            addLog("Solicitare permisiune USB Android pentru ${serialDevice.deviceName} (VID: 0x${Integer.toHexString(serialDevice.vendorId)}). Apasă 'Permite' pe ecran!")
+            try {
+                val permissionIntent = PendingIntent.getBroadcast(
+                    context,
+                    0,
+                    Intent("com.synthesis.USB_PERMISSION"),
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                usbManager.requestPermission(serialDevice, permissionIntent)
+            } catch (e: Exception) {
+                addLog("Eroare cerere permisiune USB: ${e.message}")
+            }
+            return false
+        }
+
+        addLog("Dispozitiv USB telescop selectat: ${serialDevice.deviceName} (VID: 0x${Integer.toHexString(serialDevice.vendorId)} PID: 0x${Integer.toHexString(serialDevice.productId)}). Deschidere port serial...")
+
+        var connection: UsbDeviceConnection? = null
+        try {
+            connection = usbManager.openDevice(serialDevice)
+        } catch (e: Exception) {
+            addLog("Eroare la deschiderea dispozitivului USB: ${e.message}")
+        }
+
+        if (connection == null) {
+            addLog("Eșec la deschiderea conexiunii USB fizice (Permisiune refuzată sau cablu deconectat).")
+            return false
+        }
+
+        var epOut: UsbEndpoint? = null
+        var claimed = false
+
+        for (i in 0 until serialDevice.interfaceCount) {
+            val usbIf = serialDevice.getInterface(i)
+            if (connection.claimInterface(usbIf, true)) {
+                for (j in 0 until usbIf.endpointCount) {
+                    val ep = usbIf.getEndpoint(j)
+                    if (ep.direction == UsbConstants.USB_DIR_OUT) {
+                        epOut = ep
+                        claimed = true
+                        break
+                    }
+                }
+                if (claimed) break
+            }
+        }
+
+        if (!claimed || epOut == null) {
+            connection.close()
+            addLog("Eroare: Nu s-a putut aloca interfața serială USB (Lipsește canalul OUT de date). Verifică compatibilitatea cablului.")
+            return false
+        }
+
+        usbConnection = connection
+        usbEndpointOut = epOut
+
+        // Configure Hardware UART chip parameters (Baud 9600, 8N1)
+        val chipName = configureUsbSerialChip(connection, serialDevice.vendorId, serialDevice.productId)
+        addLog("Port fizic UART configurat: $chipName @ 9600 bps, 8N1.")
+        addLog("Important: Verifică ca montura să aibă 'Star Alignment' finalizat din telecomandă, altfel motoarele refuză comanda GoTo.")
+
+        _telemetry.value = _telemetry.value.copy(
+            isConnected = true,
+            connectionMode = MountConnectionMode.USB_SERIAL_OTG,
+            isParked = false,
+            isTracking = true,
+            lastExecutedCommand = "USB_SERIAL_PORT_OPEN ($chipName)"
+        )
+        return true
     }
 
     fun connectWifi(ip: String = "192.168.4.1", port: Int = 4030) {
@@ -326,7 +478,14 @@ class TelescopeMotorControlService @Inject constructor(
                     val conn = usbConnection
                     val ep = usbEndpointOut
                     if (conn != null && ep != null) {
-                        conn.bulkTransfer(ep, bytes, bytes.size, 1000)
+                        val sent = conn.bulkTransfer(ep, bytes, bytes.size, 1000)
+                        if (sent >= 0) {
+                            addLog("Comandă trimisă fizic ($sent octeți): $asciiCommand")
+                        } else {
+                            addLog("Avertisment USB: Trimitere eșuată ($sent). Verifică conexiunea cablului.")
+                        }
+                    } else {
+                        addLog("Eroare hardware: Portul fizic USB nu este activ. Reîncearcă conexiunea cablului OTG!")
                     }
                 }
             } catch (e: Exception) {

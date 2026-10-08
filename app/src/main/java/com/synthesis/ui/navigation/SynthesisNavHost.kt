@@ -24,7 +24,8 @@ fun SynthesisNavHost(
                 onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
                 onViewDeepHunt = { navController.navigate("deep_hunt") },
                 onViewAdvancedLab = { navController.navigate("advanced_lab") },
-                onViewTerraFrontier = { navController.navigate("terra_frontier") }
+                onViewTerraFrontier = { navController.navigate("terra_frontier") },
+                onViewResearchArchive = { navController.navigate("research_archive") }
             )
         }
         composable("new_investigation") {
@@ -117,6 +118,11 @@ fun SynthesisNavHost(
         }
         composable("terra_frontier") {
             TerraFrontierScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("research_archive") {
+            SynthesizedResearchScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

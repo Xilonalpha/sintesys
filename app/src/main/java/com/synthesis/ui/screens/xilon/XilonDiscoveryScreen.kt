@@ -2,6 +2,7 @@ package com.synthesis.ui.screens.xilon
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import java.util.Locale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -13,19 +14,20 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
@@ -105,7 +107,7 @@ fun XilonDiscoveryScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
                 actions = {
@@ -339,6 +341,20 @@ fun XilonDiscoveryScreen(
                     // 8. Share / Export Dossiers
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = {
+                                    viewModel.saveXilonToResearchArchive(res)
+                                    Toast.makeText(context, "Sinteza '${res.tceName}' a fost salvată în Arhiva Room DB!", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Save, contentDescription = null, tint = DarkBackground)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("SALVEAZĂ ÎN ARHIVA ROOM DB", color = DarkBackground, style = MaterialTheme.typography.labelLarge)
+                            }
+
                             Button(
                                 onClick = {
                                     val text = buildDiscoveryDossierText(res)
@@ -1123,7 +1139,7 @@ fun AstrometryAndLiteratureCard(res: XilonDetectionResult) {
 
             // Peer-Reviewed Literature Cross-Reference Header
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.MenuBook, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("PEER-REVIEWED LITERATURE & ARCHIVE SEARCH", color = AccentAmber, style = MaterialTheme.typography.labelMedium)
             }
@@ -1166,7 +1182,7 @@ fun AstrometryAndLiteratureCard(res: XilonDetectionResult) {
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f).height(44.dp)
                 ) {
-                    Icon(Icons.Default.MenuBook, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("arXiv (astro-ph)", color = AccentCyan, style = MaterialTheme.typography.labelSmall)
                 }
@@ -1681,7 +1697,7 @@ fun GeminiAstrophysicistChatCard(
                     },
                     modifier = Modifier.background(AccentCyan, RoundedCornerShape(8.dp))
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = "Trimite", tint = Color.Black)
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Trimite", tint = Color.Black)
                 }
             }
         }

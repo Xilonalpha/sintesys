@@ -37,6 +37,14 @@ object AppModule {
         database.cachedExoplanetDao()
 
     @Provides @Singleton
+    fun provideSynthesizedResearchDao(database: SynthesisDatabase): com.synthesis.data.local.dao.SynthesizedResearchDao =
+        database.synthesizedResearchDao()
+
+    @Provides @Singleton
+    fun provideDiscoveryDao(database: SynthesisDatabase): com.synthesis.data.local.dao.DiscoveryDao =
+        database.discoveryDao()
+
+    @Provides @Singleton
     fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         val cacheSize = 50L * 1024 * 1024 // 50 MB HTTP Cache
@@ -156,4 +164,11 @@ object AppModule {
     fun provideMastPortalRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl("https://mast.stsci.edu/").client(client).addConverterFactory(GsonConverterFactory.create()).build()
     @Provides @Singleton fun provideMastPortalApi(@MastPortalRetrofit retrofit: Retrofit): MastPortalApi = retrofit.create(MastPortalApi::class.java)
+
+    // Google Play Billing
+    @Provides
+    @Singleton
+    fun providePlayBillingService(@ApplicationContext context: Context): com.synthesis.data.billing.PlayBillingService {
+        return com.synthesis.data.billing.PlayBillingService(context)
+    }
 }

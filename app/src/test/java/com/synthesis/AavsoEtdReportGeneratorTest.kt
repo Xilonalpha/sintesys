@@ -4,6 +4,7 @@ import com.synthesis.domain.model.exoplanet.LiveObservationSession
 import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
 import com.synthesis.service.AavsoEtdReportGenerator
 import com.synthesis.service.FitsImageParser
+import com.synthesis.service.PeriodicTransitAnalysisEngine
 import com.synthesis.service.PhotometricFileParser
 import org.junit.Assert.*
 import org.junit.Test
@@ -12,7 +13,8 @@ class AavsoEtdReportGeneratorTest {
 
     private val fitsParser = FitsImageParser()
     private val generator = AavsoEtdReportGenerator()
-    private val parser = PhotometricFileParser(fitsParser)
+    private val periodicEngine = PeriodicTransitAnalysisEngine()
+    private val parser = PhotometricFileParser(fitsParser, periodicEngine)
 
     @Test
     fun testEtdReportGeneration() {

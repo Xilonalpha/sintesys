@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -20,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -74,6 +77,10 @@ fun AdvancedDiscoveryScreen(
     val jwstSpectra by viewModel.jwstSpectra.collectAsState()
     val exomoons by viewModel.exomoons.collectAsState()
     val spaceWeatherAssessments by viewModel.spaceWeatherAssessments.collectAsState()
+    val telescopeVisionState by viewModel.telescopeVisionState.collectAsState()
+    val telescopeViewfinderBitmap by viewModel.telescopeViewfinderBitmap.collectAsState()
+    val periodicTransitResult by viewModel.periodicTransitResult.collectAsState()
+    val exportedPdfFile by viewModel.exportedPdfFile.collectAsState()
 
     var showDeblendDialog by remember { mutableStateOf(false) }
 
@@ -159,6 +166,10 @@ fun AdvancedDiscoveryScreen(
         )
     }
 
+    BackHandler(enabled = selectedTab != AdvancedTab.SMART_SCOPE) {
+        viewModel.selectTab(AdvancedTab.SMART_SCOPE)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -233,6 +244,18 @@ fun AdvancedDiscoveryScreen(
                             Icons.Default.FilterCenterFocus,
                             contentDescription = "Rescue FP Dialog",
                             tint = AccentGreen
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            viewModel.saveCurrentModuleToResearchArchive(selectedTab)
+                            Toast.makeText(context, "Sinteza modulului '${selectedTab.title}' a fost salvată în Baza de Date Room!", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = "Salvează în Arhivă Room",
+                            tint = AccentCyan
                         )
                     }
                 },
@@ -359,6 +382,53 @@ fun AdvancedDiscoveryScreen(
                         Toast.makeText(context, "Comandă $modeLabel trimisă: Orientare motoare către ${target.candidateName}...", Toast.LENGTH_SHORT).show()
                     }
                 )
+                AdvancedTab.FITS_SUMMARY -> FitsHeaderSummaryScreen(
+                    header = telescopeVisionState.lastLoadedFitsHeader,
+                    visionState = telescopeVisionState,
+                    session = liveSession,
+                    periodicResult = periodicTransitResult,
+                    onIngestFitsBytes = { bytes -> viewModel.ingestTelescopeFitsBytes(bytes) },
+                    onLoadPresetTarget = { preset -> viewModel.loadEmpiricalWasp12bDataset() },
+                    onRunPeriodicBlsScan = { pMin, pMax, rStar, mStar ->
+                        viewModel.runPeriodicBlsScanOnVision(pMin, pMax, rStar, mStar)
+                    },
+                    onNavigateToVisionEngine = { viewModel.selectTab(AdvancedTab.TELESCOPE_VISION) },
+                    onTransferToOfficialReport = {
+                        viewModel.transferVisionDataToOfficialSession()
+                        viewModel.selectTab(AdvancedTab.LIVE_PHOTOMETRY)
+                    },
+                    onAdjustSnrThreshold = { threshold ->
+                        viewModel.updateSnrFilterThreshold(threshold)
+                    },
+                    onExportPdfReport = {
+                        viewModel.exportFitsSummaryPdf(context)
+                    },
+                    onSharePdfReport = {
+                        viewModel.shareFitsSummaryPdf(context)
+                    },
+                    onOpenPdfReport = {
+                        viewModel.openFitsSummaryPdf(context)
+                    },
+                    exportedPdfFile = exportedPdfFile
+                )
+                AdvancedTab.TELESCOPE_VISION -> TelescopeCameraVisionView(
+                    visionState = telescopeVisionState,
+                    viewfinderBitmap = telescopeViewfinderBitmap,
+                    onStartPipeline = { src -> viewModel.startTelescopeVision(src) },
+                    onStopPipeline = { viewModel.stopTelescopeVision() },
+                    onResetPhotometry = { viewModel.resetTelescopeVisionPhotometry() },
+                    onSelectStarAt = { x, y, isTarget -> viewModel.selectTelescopeVisionStar(x, y, isTarget) },
+                    onIngestFitsBytes = { bytes -> viewModel.ingestTelescopeFitsBytes(bytes) },
+                    onUpdateApertureRadii = { ap, skyIn, skyOut -> viewModel.updateTelescopeApertureRadii(ap, skyIn, skyOut) },
+                    onTransferToOfficialSession = {
+                        viewModel.transferVisionDataToOfficialSession()
+                        viewModel.selectTab(AdvancedTab.LIVE_PHOTOMETRY)
+                    },
+                    onRunPeriodicBlsScan = { pMin, pMax, rStar, mStar ->
+                        viewModel.runPeriodicBlsScanOnVision(pMin, pMax, rStar, mStar)
+                    },
+                    onOpenFitsSummary = { viewModel.selectTab(AdvancedTab.FITS_SUMMARY) }
+                )
                 AdvancedTab.TELESCOPE_CONTROL -> TelescopeControlView(
                     telemetry = mountTelemetry,
                     transits = liveTransits,
@@ -386,7 +456,12 @@ fun AdvancedDiscoveryScreen(
                     },
                     onReset = { viewModel.resetPhotometrySession() },
                     onGenerateEtd = { viewModel.generateOfficialEtdReport() },
-                    onGenerateAavso = { viewModel.generateOfficialAavsoReport() }
+                    onGenerateAavso = { viewModel.generateOfficialAavsoReport() },
+                    onOpenVisionEngine = { viewModel.selectTab(AdvancedTab.TELESCOPE_VISION) },
+                    periodicResult = periodicTransitResult,
+                    onRunPeriodicBlsScan = { pMin, pMax, rStar, mStar ->
+                        viewModel.runBlsAnalysisOnCurrentData(pMin, pMax, rStar, mStar)
+                    }
                 )
                 AdvancedTab.SMART_SCOPE -> SmartScopeView(
                     telemetry = smartScopeTelemetry,
@@ -395,7 +470,8 @@ fun AdvancedDiscoveryScreen(
                     onDisconnect = { viewModel.disconnectSmartScope() },
                     onSlewTarget = { target -> viewModel.slewSmartScopeToTarget(target) },
                     onStartSequence = { exp, gain, filter -> viewModel.startSmartScopeSequence(exp, gain, filter) },
-                    onStopSequence = { viewModel.stopSmartScopeSequence() }
+                    onStopSequence = { viewModel.stopSmartScopeSequence() },
+                    onOpenVisionEngine = { viewModel.selectTab(AdvancedTab.TELESCOPE_VISION) }
                 )
                 AdvancedTab.BIG_BANG_COSMOLOGY -> BigBangUniverseScreen(
                     engine = viewModel.bigBangCosmologyEngine
@@ -747,7 +823,7 @@ private fun TelescopeControlView(
                                 onClick = { onJog(SlewDirection.WEST, selectedRate) },
                                 modifier = Modifier.size(54.dp).background(AccentCyan.copy(alpha = 0.2f), CircleShape)
                             ) {
-                                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "West", tint = AccentCyan, modifier = Modifier.size(32.dp))
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "West", tint = AccentCyan, modifier = Modifier.size(32.dp))
                             }
 
                             Surface(
@@ -764,7 +840,7 @@ private fun TelescopeControlView(
                                 onClick = { onJog(SlewDirection.EAST, selectedRate) },
                                 modifier = Modifier.size(54.dp).background(AccentCyan.copy(alpha = 0.2f), CircleShape)
                             ) {
-                                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "East", tint = AccentCyan, modifier = Modifier.size(32.dp))
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "East", tint = AccentCyan, modifier = Modifier.size(32.dp))
                             }
                         }
 

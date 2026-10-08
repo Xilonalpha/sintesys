@@ -1,6 +1,7 @@
 package com.synthesis.service
 
 import com.synthesis.domain.model.exoplanet.LiveObservationSession
+import com.synthesis.domain.model.exoplanet.PeriodicTransitDetectionResult
 import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,12 +17,14 @@ data class PhotometryParseResult(
     val durationMinutes: Double,
     val snr: Double,
     val chiSquaredPerDof: Double,
-    val logSummary: String
+    val logSummary: String,
+    val periodicTransitResult: PeriodicTransitDetectionResult? = null
 )
 
 @Singleton
 class PhotometricFileParser @Inject constructor(
-    val fitsImageParser: FitsImageParser
+    val fitsImageParser: FitsImageParser,
+    val periodicTransitEngine: PeriodicTransitAnalysisEngine
 ) {
 
     /**
@@ -146,7 +149,16 @@ class PhotometricFileParser @Inject constructor(
         val dof = (finalPoints.size - 3).coerceAtLeast(1)
         val reducedChiSq = (chiSq / dof).coerceIn(0.5, 3.5)
 
-        val log = "Importate cu succes ${finalPoints.size} măsurători reale. Adâncime măsurată: ${measuredDepthPpm.toInt()} ppm (${String.format("%.3f", measuredRadiusEarth)} R⊕). SNR: ${String.format("%.1f", snr)}σ."
+        val periodicResult = if (finalPoints.size >= 8) {
+            periodicTransitEngine.analyzeDataPoints(finalPoints, hostStarRadiusSolar = defaultHostStarRadiusSun)
+        } else null
+
+        val log = buildString {
+            append("Importate cu succes ${finalPoints.size} măsurători reale. Adâncime măsurată: ${measuredDepthPpm.toInt()} ppm (${String.format("%.3f", measuredRadiusEarth)} R⊕). SNR: ${String.format("%.1f", snr)}σ.")
+            if (periodicResult?.isDetected == true) {
+                append(" ★ BLS: Semnal periodic detectat! P=${String.format("%.3f", periodicResult.bestPeriodDays)}d, SDE=${String.format("%.2f", periodicResult.signalDetectionEfficiencySde)}.")
+            }
+        }
 
         return PhotometryParseResult(
             points = finalPoints,
@@ -156,7 +168,8 @@ class PhotometricFileParser @Inject constructor(
             durationMinutes = durationMin,
             snr = snr,
             chiSquaredPerDof = reducedChiSq,
-            logSummary = log
+            logSummary = log,
+            periodicTransitResult = periodicResult
         )
     }
 
@@ -167,7 +180,8 @@ class PhotometricFileParser @Inject constructor(
         fitsFramesBytes: List<Pair<Double, ByteArray>>, // List of (BJD, raw FITS file bytes)
         targetX: Float,
         targetY: Float,
-        apRadius: Float = 5.0f
+        apRadius: Float = 5.0f,
+        hostStarRadiusSun: Double = 1.0
     ): PhotometryParseResult {
         if (fitsFramesBytes.isEmpty()) {
             throw IllegalArgumentException("Niciun cadru FITS furnizat pentru analiză.")
@@ -195,15 +209,27 @@ class PhotometricFileParser @Inject constructor(
         val minFlux = parsedPoints.minOfOrNull { it.relativeFlux } ?: 1.0
         val depthPpm = (1.0 - minFlux).coerceAtLeast(0.0001) * 1_000_000.0
 
+        val periodicResult = if (parsedPoints.size >= 8) {
+            periodicTransitEngine.analyzeDataPoints(parsedPoints, hostStarRadiusSolar = hostStarRadiusSun)
+        } else null
+
+        val summary = buildString {
+            append("Procesate cu succes ${fitsFramesBytes.size} cadre FITS binare prin fotometrie de apertură sintetică.")
+            if (periodicResult?.isDetected == true) {
+                append(" ★ BLS: Periodicitate confirmată (P=${String.format("%.3f", periodicResult.bestPeriodDays)} zile, SDE=${String.format("%.2f", periodicResult.signalDetectionEfficiencySde)}, SNR=${String.format("%.1f", periodicResult.transitSnr)}σ).")
+            }
+        }
+
         return PhotometryParseResult(
             points = parsedPoints,
             measuredDepthPpm = depthPpm,
-            measuredRadiusEarth = sqrt(depthPpm / 1_000_000.0) * 109.07,
+            measuredRadiusEarth = sqrt(depthPpm / 1_000_000.0) * 109.07 * hostStarRadiusSun,
             calculatedMidBjd = firstBjd + ((parsedPoints.size / 2) * (10.0 / 1440.0)),
             durationMinutes = (parsedPoints.size * 5.0).coerceAtLeast(30.0),
-            snr = 15.0,
-            chiSquaredPerDof = 1.05,
-            logSummary = "Procesate cu succes ${fitsFramesBytes.size} cadre FITS binare prin fotometrie de apertură sintetică."
+            snr = periodicResult?.transitSnr ?: 15.0,
+            chiSquaredPerDof = periodicResult?.vetting?.chiSquaredTransit ?: 1.05,
+            logSummary = summary,
+            periodicTransitResult = periodicResult
         )
     }
 }

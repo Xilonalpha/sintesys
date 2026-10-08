@@ -1,18 +1,23 @@
 package com.synthesis.data.billing
 
+import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class SubscriptionPlan(val id: String, val title: String, val priceFormatted: String, val period: String) {
     NONE("none", "Free Trial", "0.00 €", "60 minute"),
-    MONTHLY("synthesis_monthly_999", "Abonament Lunar", "9.99 €", "pe lună"),
-    YEARLY("synthesis_yearly_7500", "Abonament Anual (Recomandat)", "75.00 €", "pe an (-37% reducere)")
+    MONTHLY(PlayBillingService.SKU_MONTHLY, "Abonament Lunar", "9.99 €", "pe lună"),
+    YEARLY(PlayBillingService.SKU_YEARLY, "Abonament Anual (Recomandat)", "75.00 €", "pe an (-37% reducere)")
 }
 
 @Singleton
@@ -21,6 +26,7 @@ class SubscriptionManager @Inject constructor(
     val playBillingService: PlayBillingService
 ) {
     private val prefs: SharedPreferences = context.getSharedPreferences("synthesis_billing_prefs", Context.MODE_PRIVATE)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     companion object {
         const val TRIAL_DURATION_MS = 60 * 60 * 1000L // Exact 1 hour (60 minutes)
@@ -50,6 +56,19 @@ class SubscriptionManager @Inject constructor(
     init {
         ensureFirstLaunchInitialized()
         tickUsage()
+        observeExternalPurchases()
+    }
+
+    private fun observeExternalPurchases() {
+        scope.launch {
+            playBillingService.activePurchase.collect { purchase ->
+                if (purchase != null) {
+                    val matchingPlan = SubscriptionPlan.values().find { it.id == purchase.productId }
+                        ?: SubscriptionPlan.YEARLY
+                    activatePro(matchingPlan, purchase.orderId)
+                }
+            }
+        }
     }
 
     private fun ensureFirstLaunchInitialized() {
@@ -72,8 +91,8 @@ class SubscriptionManager @Inject constructor(
         val now = System.currentTimeMillis()
         val lastTick = prefs.getLong(KEY_LAST_TICK, now)
         val delta = (now - lastTick).coerceAtLeast(0L).coerceAtMost(300_000L) // Cap runaway sleep deltas
-
         val currentAccumulated = prefs.getLong(KEY_ACCUMULATED_USAGE, 0L) + delta
+
         prefs.edit()
             .putLong(KEY_ACCUMULATED_USAGE, currentAccumulated)
             .putLong(KEY_LAST_TICK, now)
@@ -86,7 +105,6 @@ class SubscriptionManager @Inject constructor(
 
     private fun calculateRemainingSeconds(): Long {
         if (prefs.getBoolean(KEY_IS_PRO, false)) return Long.MAX_VALUE
-
         val firstLaunch = prefs.getLong(KEY_FIRST_LAUNCH, System.currentTimeMillis())
         val accumulated = prefs.getLong(KEY_ACCUMULATED_USAGE, 0L)
         val elapsedWallClock = (System.currentTimeMillis() - firstLaunch).coerceAtLeast(0L)
@@ -102,20 +120,17 @@ class SubscriptionManager @Inject constructor(
         return calculateRemainingSeconds() <= 0L
     }
 
-    fun purchaseSubscription(plan: SubscriptionPlan, onComplete: ((Boolean, String) -> Unit)? = null): Boolean {
+    fun purchaseSubscription(
+        plan: SubscriptionPlan,
+        activity: Activity? = null,
+        onComplete: ((Boolean, String) -> Unit)? = null
+    ): Boolean {
         var success = false
-        playBillingService.launchPurchaseFlow(plan.id) { result ->
+
+        val handleResult: (PurchaseVerificationResult) -> Unit = { result ->
             when (result) {
                 is PurchaseVerificationResult.Success -> {
-                    prefs.edit()
-                        .putBoolean(KEY_IS_PRO, true)
-                        .putString(KEY_ACTIVE_PLAN, plan.id)
-                        .putString(KEY_ORDER_ID, result.orderId)
-                        .apply()
-                    _isPro.value = true
-                    _activePlan.value = plan
-                    _isLocked.value = false
-                    _remainingTrialSeconds.value = Long.MAX_VALUE
+                    activatePro(plan, result.orderId)
                     success = true
                     onComplete?.invoke(true, "Abonament activat cu succes! Comanda: ${result.orderId}")
                 }
@@ -127,21 +142,53 @@ class SubscriptionManager @Inject constructor(
                 }
             }
         }
+
+        if (activity != null) {
+            playBillingService.launchBillingFlow(activity, plan.id, handleResult)
+        } else {
+            playBillingService.launchPurchaseFlow(plan.id, handleResult)
+        }
+
         return success
     }
 
-    fun restorePurchases(): Boolean {
-        // If there's an existing valid active plan
-        val isSubscribed = prefs.getBoolean(KEY_IS_PRO, false)
-        if (isSubscribed) {
+    private fun activatePro(plan: SubscriptionPlan, orderId: String) {
+        prefs.edit()
+            .putBoolean(KEY_IS_PRO, true)
+            .putString(KEY_ACTIVE_PLAN, plan.id)
+            .putString(KEY_ORDER_ID, orderId)
+            .apply()
+        _isPro.value = true
+        _activePlan.value = plan
+        _isLocked.value = false
+        _remainingTrialSeconds.value = Long.MAX_VALUE
+    }
+
+    fun restorePurchases(onComplete: ((Boolean, String?) -> Unit)? = null): Boolean {
+        // First check local preferences
+        val isSubscribedLocally = prefs.getBoolean(KEY_IS_PRO, false)
+        if (isSubscribedLocally) {
             _isPro.value = true
             _isLocked.value = false
+            onComplete?.invoke(true, "Abonament restaurat din cache local.")
             return true
+        }
+
+        // Query official Google Play Billing Store
+        playBillingService.queryExistingPurchases { activePurchases ->
+            if (activePurchases.isNotEmpty()) {
+                val first = activePurchases.first()
+                val plan = SubscriptionPlan.values().find { it.id in first.products } ?: SubscriptionPlan.YEARLY
+                activatePro(plan, first.orderId ?: "GPA.RESTORED")
+                onComplete?.invoke(true, "Abonament Google Play restaurat cu succes!")
+            } else {
+                onComplete?.invoke(false, "Nu s-au găsit achiziții active pe acest cont Google Play.")
+            }
         }
         return false
     }
 
-    // Diagnostic & Demo Controls for the User
+    // Diagnostic & Demo Controls for testing
     fun forceExpireTrialForTesting() {
         prefs.edit()
             .putBoolean(KEY_IS_PRO, false)

@@ -1,5 +1,6 @@
 package com.synthesis.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,7 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.exoplanet.*
 import com.synthesis.ui.theme.*
@@ -35,6 +38,7 @@ fun DeepHuntScreen(
     val ttvSystems by viewModel.ttvSystems.collectAsState()
     val atmosphericScores by viewModel.atmosphericScores.collectAsState()
     val neglectedJewels by viewModel.neglectedJewels.collectAsState()
+    val context = LocalContext.current
 
     var showSolverDialog by remember { mutableStateOf(false) }
 
@@ -107,7 +111,11 @@ fun DeepHuntScreen(
             when (selectedTab) {
                 DeepHuntTab.MONO_TRANSITS -> MonoTransitsView(
                     candidates = monoTransits,
-                    onOpenSolver = { showSolverDialog = true }
+                    onOpenSolver = { showSolverDialog = true },
+                    onSaveCandidate = { candidate ->
+                        viewModel.saveCandidateToResearchArchive(candidate)
+                        Toast.makeText(context, "Sinteza '${candidate.candidateName}' a fost salvată în Baza de Date Room!", Toast.LENGTH_SHORT).show()
+                    }
                 )
                 DeepHuntTab.TTV_INVERSION -> TtvInversionView(ttvSystems)
                 DeepHuntTab.ATMOSPHERIC_TSM -> AtmosphericTsmView(atmosphericScores)
@@ -142,7 +150,8 @@ fun DeepHuntScreen(
 @Composable
 private fun MonoTransitsView(
     candidates: List<MonoTransitCandidate>,
-    onOpenSolver: () -> Unit
+    onOpenSolver: () -> Unit,
+    onSaveCandidate: (MonoTransitCandidate) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -254,6 +263,23 @@ private fun MonoTransitsView(
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(
+                            onClick = { onSaveCandidate(candidate) },
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.6f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("SALVEAZĂ ÎN ROOM DB", fontSize = 11.sp, color = AccentCyan)
+                        }
+                    }
                 }
             }
         }

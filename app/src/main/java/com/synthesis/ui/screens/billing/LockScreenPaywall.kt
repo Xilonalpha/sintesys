@@ -13,11 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.Activity
 import com.synthesis.data.billing.SubscriptionManager
 import com.synthesis.data.billing.SubscriptionPlan
 import com.synthesis.ui.theme.*
@@ -27,6 +29,8 @@ fun LockScreenPaywall(
     subscriptionManager: SubscriptionManager,
     onUnlocked: () -> Unit
 ) {
+    val context = LocalContext.current
+    val activity = context as? Activity
     var isProcessing by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
@@ -125,17 +129,23 @@ fun LockScreenPaywall(
                     Button(
                         onClick = {
                             isProcessing = true
-                            subscriptionManager.purchaseSubscription(SubscriptionPlan.YEARLY)
-                            isProcessing = false
-                            onUnlocked()
+                            subscriptionManager.purchaseSubscription(SubscriptionPlan.YEARLY, activity = activity) { success, msg ->
+                                isProcessing = false
+                                if (success) {
+                                    onUnlocked()
+                                } else {
+                                    statusMessage = msg
+                                }
+                            }
                         },
+                        enabled = !isProcessing,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = Color.Black),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ACTIVEAZĂ PLAN ANUAL (75 €)", fontWeight = FontWeight.Bold)
+                        Text(if (isProcessing) "SE PROCESEAZĂ..." else "ACTIVEAZĂ PLAN ANUAL (75 €)", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -166,16 +176,22 @@ fun LockScreenPaywall(
                     OutlinedButton(
                         onClick = {
                             isProcessing = true
-                            subscriptionManager.purchaseSubscription(SubscriptionPlan.MONTHLY)
-                            isProcessing = false
-                            onUnlocked()
+                            subscriptionManager.purchaseSubscription(SubscriptionPlan.MONTHLY, activity = activity) { success, msg ->
+                                isProcessing = false
+                                if (success) {
+                                    onUnlocked()
+                                } else {
+                                    statusMessage = msg
+                                }
+                            }
                         },
+                        enabled = !isProcessing,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
                         border = BorderStroke(1.dp, AccentCyan),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text("ACTIVEAZĂ PLAN LUNAR (9.99 €)", fontWeight = FontWeight.SemiBold)
+                        Text(if (isProcessing) "SE PROCESEAZĂ..." else "ACTIVEAZĂ PLAN LUNAR (9.99 €)", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -188,13 +204,17 @@ fun LockScreenPaywall(
             ) {
                 TextButton(
                     onClick = {
-                        val restored = subscriptionManager.restorePurchases()
-                        if (restored) {
-                            onUnlocked()
-                        } else {
-                            statusMessage = "Nu s-au găsit abonamente active anterioare."
+                        isProcessing = true
+                        subscriptionManager.restorePurchases { success, msg ->
+                            isProcessing = false
+                            if (success) {
+                                onUnlocked()
+                            } else {
+                                statusMessage = msg ?: "Nu s-au găsit abonamente active anterioare."
+                            }
                         }
-                    }
+                    },
+                    enabled = !isProcessing
                 ) {
                     Text("Restaurează Achizițiile", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                 }

@@ -11,11 +11,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.synthesis"
+        applicationId = "com.syntesys"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.6.0"
+        versionCode = 9
+        versionName = "1.6.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -102,6 +102,8 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.hilt:hilt-work:1.2.0")
     ksp("androidx.hilt:hilt-compiler:1.2.0")
+
+    implementation("com.android.billingclient:billing-ktx:8.0.0")
 
     testImplementation("junit:junit:4.13.2")
 }
