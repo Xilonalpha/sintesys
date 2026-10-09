@@ -74,7 +74,7 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     private val _periodicTransitResult = MutableStateFlow<PeriodicTransitDetectionResult?>(null)
     val periodicTransitResult: StateFlow<PeriodicTransitDetectionResult?> = _periodicTransitResult.asStateFlow()
 
-    private val _selectedTab = MutableStateFlow(AdvancedTab.TELESCOPE_VISION)
+    private val _selectedTab = MutableStateFlow(AdvancedTab.SMART_SCOPE)
     val selectedTab: StateFlow<AdvancedTab> = _selectedTab.asStateFlow()
 
     private val _biosignatures = MutableStateFlow<List<BiosignatureAssessment>>(emptyList())
@@ -246,6 +246,46 @@ class AdvancedDiscoveryViewModel @Inject constructor(
             checkStarMag = checkMag
         )
         _alertSuccessMessage.value = "Setările reale ale observatorului au fost actualizate pentru raportul ETD/AAVSO."
+    }
+
+    fun refreshActiveModuleData() {
+        when (_selectedTab.value) {
+            AdvancedTab.SMART_SCOPE -> smartTelescopeSyncService.startNetworkDiscovery()
+            AdvancedTab.SKY_RADAR -> {
+                _liveTransits.value = repository.getCuratedLiveTransits()
+            }
+            AdvancedTab.FITS_SUMMARY, AdvancedTab.TELESCOPE_VISION -> {
+                loadEmpiricalWasp12bDataset()
+            }
+            AdvancedTab.LIVE_PHOTOMETRY -> {
+                resetPhotometrySession()
+            }
+            AdvancedTab.BIOSIGNATURES -> {
+                _biosignatures.value = repository.getCuratedBiosignatures()
+                _technosignatures.value = repository.getCuratedTechnosignatures()
+            }
+            AdvancedTab.FALSE_POSITIVE_RESCUE -> {
+                _dilutionRescues.value = repository.getCuratedDilutionRescues()
+            }
+            AdvancedTab.HARMONIC_STITCHER -> {
+                _harmonicStitches.value = repository.getCuratedHarmonicStitches()
+            }
+            AdvancedTab.PLATO_ASTEROSEISMOLOGY -> {
+                _platoTargets.value = repository.getCuratedPlatoAsteroseismicTargets()
+            }
+            AdvancedTab.JWST_SPECTROSCOPY -> {
+                _jwstSpectra.value = repository.getCuratedJwstSpectra()
+            }
+            AdvancedTab.EXOMOON_OCEANS -> {
+                _exomoons.value = repository.getCuratedExomoons()
+            }
+            AdvancedTab.SPACE_WEATHER -> {
+                _spaceWeatherAssessments.value = repository.getCuratedSpaceWeatherAssessments()
+            }
+            else -> {
+                loadData()
+            }
+        }
     }
 
     fun resetPhotometrySession() {

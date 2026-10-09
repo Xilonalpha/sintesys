@@ -53,10 +53,19 @@ import kotlin.math.roundToInt
 @Composable
 fun AdvancedDiscoveryScreen(
     onNavigateBack: () -> Unit,
+    initialTab: AdvancedTab? = null,
     viewModel: AdvancedDiscoveryViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val selectedTab by viewModel.selectedTab.collectAsState()
+
+    LaunchedEffect(initialTab) {
+        if (initialTab != null) {
+            viewModel.selectTab(initialTab)
+        }
+    }
+
+    var showAllModulesDialog by remember { mutableStateOf(false) }
     val biosignatures by viewModel.biosignatures.collectAsState()
     val technosignatures by viewModel.technosignatures.collectAsState()
     val dilutionRescues by viewModel.dilutionRescues.collectAsState()
@@ -229,6 +238,27 @@ fun AdvancedDiscoveryScreen(
                 actions = {
                     IconButton(
                         onClick = {
+                            viewModel.refreshActiveModuleData()
+                            Toast.makeText(context, "Modulul '${selectedTab.title}' a fost reîmprospătat!", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reîmprospătează date modul",
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(
+                        onClick = { showAllModulesDialog = true }
+                    ) {
+                        Icon(
+                            Icons.Default.GridView,
+                            contentDescription = "Catalog Toate Modulele",
+                            tint = AccentCyan
+                        )
+                    }
+                    IconButton(
+                        onClick = {
                             viewModel.subscriptionManager.forceExpireTrialForTesting()
                             Toast.makeText(context, "Perioada de test a fost setată pe expirat. Ecranul de blocare este activ!", Toast.LENGTH_LONG).show()
                         }
@@ -269,7 +299,7 @@ fun AdvancedDiscoveryScreen(
                 .padding(padding)
                 .background(DarkBackground)
         ) {
-            var showOnly2026 by remember { mutableStateOf(true) }
+            var showOnly2026 by remember { mutableStateOf(false) }
             val displayedTabs = remember(showOnly2026) {
                 if (showOnly2026) {
                     AdvancedTab.values().filter { it.isYear2026 }
@@ -278,7 +308,7 @@ fun AdvancedDiscoveryScreen(
                 }
             }
 
-            // 2026 Category Toggle Bar
+            // 2026 Category Toggle Bar with Direct Module Menu Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -287,6 +317,20 @@ fun AdvancedDiscoveryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Button(
+                    onClick = { showAllModulesDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentCyan.copy(alpha = 0.2f),
+                        contentColor = AccentCyan
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Default.GridView, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("MENIU TOATE MODULELE (18)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
                 FilterChip(
                     selected = showOnly2026,
                     onClick = {
@@ -295,7 +339,7 @@ fun AdvancedDiscoveryScreen(
                             viewModel.selectTab(AdvancedTab.SMART_SCOPE)
                         }
                     },
-                    label = { Text("🚀 MOTOARE NOI 2026/27 (9)", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                    label = { Text("🚀 Noi 2026/27", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = AccentCyan,
                         selectedLabelColor = Color.Black
@@ -305,7 +349,7 @@ fun AdvancedDiscoveryScreen(
                 FilterChip(
                     selected = !showOnly2026,
                     onClick = { showOnly2026 = false },
-                    label = { Text("🔬 TOATE MODULELE (16)", fontSize = 12.sp) }
+                    label = { Text("🔬 Toate (18)", fontSize = 11.sp) }
                 )
             }
 
@@ -557,6 +601,17 @@ fun AdvancedDiscoveryScreen(
                     Text("ÎNCHIDE", color = TextSecondary)
                 }
             }
+        )
+    }
+
+    if (showAllModulesDialog) {
+        AllModulesCatalogDialog(
+            currentTab = selectedTab,
+            onSelectTab = { tab ->
+                viewModel.selectTab(tab)
+                showAllModulesDialog = false
+            },
+            onDismiss = { showAllModulesDialog = false }
         )
     }
 
@@ -1613,4 +1668,201 @@ private fun CustomDeblendDialog(
             TextButton(onClick = onDismiss) { Text("CANCEL", color = TextSecondary) }
         }
     )
+}
+
+@Composable
+fun AllModulesCatalogDialog(
+    currentTab: AdvancedTab,
+    onSelectTab: (AdvancedTab) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.GridView, contentDescription = null, tint = AccentCyan)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "CATALOG MODULE LABORATOARE",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+                Surface(
+                    color = AccentCyan.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        "18 MODULE",
+                        color = AccentCyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Text(
+                        "Selectează direct oricare dintre cele 18 instrumente științifice fără a mai naviga orizontal prin tab-uri:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // Group 1: Observații & Hardware
+                item {
+                    Text(
+                        "🔭 OBSERVAȚII & HARDWARE TELESCOP",
+                        color = AccentGreen,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                }
+                val obsTabs = listOf(
+                    AdvancedTab.SMART_SCOPE,
+                    AdvancedTab.FITS_SUMMARY,
+                    AdvancedTab.TELESCOPE_VISION,
+                    AdvancedTab.SKY_RADAR,
+                    AdvancedTab.TELESCOPE_CONTROL,
+                    AdvancedTab.LIVE_PHOTOMETRY,
+                    AdvancedTab.AR_SKY_CAMERA
+                )
+                items(obsTabs) { tab ->
+                    ModuleItemRow(
+                        tab = tab,
+                        isSelected = tab == currentTab,
+                        onClick = { onSelectTab(tab) }
+                    )
+                }
+
+                // Group 2: Spectroscopie & Laborator
+                item {
+                    Text(
+                        "🔬 SPECTROSCOPIE & ASTROFIZICĂ PLANETARĂ",
+                        color = AccentCyan,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                    )
+                }
+                val specTabs = listOf(
+                    AdvancedTab.JWST_SPECTROSCOPY,
+                    AdvancedTab.PLATO_ASTEROSEISMOLOGY,
+                    AdvancedTab.ROMAN_MICROLENSING,
+                    AdvancedTab.EXOMOON_OCEANS,
+                    AdvancedTab.SPACE_WEATHER,
+                    AdvancedTab.BIOSIGNATURES,
+                    AdvancedTab.FALSE_POSITIVE_RESCUE,
+                    AdvancedTab.HARMONIC_STITCHER,
+                    AdvancedTab.CLIMATE_SIMULATOR
+                )
+                items(specTabs) { tab ->
+                    ModuleItemRow(
+                        tab = tab,
+                        isSelected = tab == currentTab,
+                        onClick = { onSelectTab(tab) }
+                    )
+                }
+
+                // Group 3: Cosmologie & Relativitate
+                item {
+                    Text(
+                        "🌌 COSMOLOGIE & FIZICĂ RELATIVISTĂ",
+                        color = AccentMagenta,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                    )
+                }
+                val cosmoTabs = listOf(
+                    AdvancedTab.BIG_BANG_COSMOLOGY,
+                    AdvancedTab.BLACK_HOLES
+                )
+                items(cosmoTabs) { tab ->
+                    ModuleItemRow(
+                        tab = tab,
+                        isSelected = tab == currentTab,
+                        onClick = { onSelectTab(tab) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("ÎNCHIDE", color = AccentCyan)
+            }
+        },
+        containerColor = DarkSurface
+    )
+}
+
+@Composable
+private fun ModuleItemRow(
+    tab: AdvancedTab,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (isSelected) AccentCyan.copy(alpha = 0.2f) else Color(0xFF1E293B),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) AccentCyan else Color(0xFF334155)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tab.title,
+                    color = if (isSelected) AccentCyan else Color.White,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 13.sp
+                )
+                if (tab.isYear2026) {
+                    Text(
+                        "Modul Avansat 2026/27",
+                        color = TextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+            if (isSelected) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = "Selectat",
+                    tint = AccentCyan,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                Icon(
+                    Icons.Default.ArrowForwardIos,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
 }

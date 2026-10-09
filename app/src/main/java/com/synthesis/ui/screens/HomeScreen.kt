@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,25 @@ import com.synthesis.ui.theme.*
 import com.synthesis.viewmodel.HomeViewModel
 import java.util.Locale
 
+enum class ModuleCategory(val label: String, val icon: String) {
+    ALL("Toate", "🔬"),
+    TELESCOPES("Telescoape & Cer", "🔭"),
+    EXOPLANETS("Exoplanete & Tranzit", "🪐"),
+    SPECTROSCOPY("Spectroscopie & Fizică", "🧪"),
+    COSMOLOGY("Cosmologie & Terra", "🌌")
+}
+
+data class AppModuleItem(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val icon: String,
+    val category: ModuleCategory,
+    val badge: String? = null,
+    val is2026New: Boolean = false,
+    val onClick: () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -39,7 +59,7 @@ fun HomeScreen(
     onViewExoplanets: () -> Unit,
     onViewXilonDiscovery: () -> Unit = {},
     onViewDeepHunt: () -> Unit = {},
-    onViewAdvancedLab: () -> Unit = {},
+    onViewAdvancedLab: (String?) -> Unit = {},
     onViewTerraFrontier: () -> Unit = {},
     onViewResearchArchive: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -49,8 +69,251 @@ fun HomeScreen(
     val syncInfo by viewModel.syncInfo.collectAsState()
     val context = LocalContext.current
 
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf(ModuleCategory.ALL) }
+
     LaunchedEffect(Unit) {
         viewModel.loadSyncInfo(context)
+    }
+
+    // Complete catalog of all modules in the application
+    val allModules = remember(onViewAdvancedLab, onViewXilonDiscovery, onViewDeepHunt, onViewExoplanets, onViewTerraFrontier, onViewResearchArchive) {
+        listOf(
+            // 1. EXOPLANET DISCOVERY & TRANSIT
+            AppModuleItem(
+                id = "xilon_ai",
+                title = "Xilon AI: Detecție Autonomă",
+                subtitle = "Algoritm BLS, modelare Mandel-Agol și chat astrofizic Gemini 3.5 Flash",
+                icon = "✨",
+                category = ModuleCategory.EXOPLANETS,
+                badge = "AI LIVE",
+                is2026New = true,
+                onClick = onViewXilonDiscovery
+            ),
+            AppModuleItem(
+                id = "deep_hunt",
+                title = "Deep Hunt: Blindspots TESS",
+                subtitle = "Mono-tranzite cu perioadă lungă & exoplanete din sectoare neacoperite",
+                icon = "⚡",
+                category = ModuleCategory.EXOPLANETS,
+                badge = "TESS",
+                is2026New = true,
+                onClick = onViewDeepHunt
+            ),
+            AppModuleItem(
+                id = "fits_summary",
+                title = "FITS Header & Curbe de Lumină",
+                subtitle = "Metadate observator, slider SNR dinamic în timp real și export rapoarte PDF",
+                icon = "📊",
+                category = ModuleCategory.EXOPLANETS,
+                badge = "FITS + PDF",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("FITS_HEADER_SUMMARY") }
+            ),
+            AppModuleItem(
+                id = "nasa_archive",
+                title = "Catalog Exoplanete NASA (TAP)",
+                subtitle = "Explorare baze de date NASA Exoplanet Archive, Kepler, K2 și TESS",
+                icon = "🪐",
+                category = ModuleCategory.EXOPLANETS,
+                badge = "NASA TAP",
+                onClick = onViewExoplanets
+            ),
+            AppModuleItem(
+                id = "live_photometry",
+                title = "Fotometrie Live & Raportare Oficială",
+                subtitle = "Extracție flux fotometric, calibrare diferențială și export AAVSO / CAS (ETD)",
+                icon = "📉",
+                category = ModuleCategory.EXOPLANETS,
+                onClick = { onViewAdvancedLab("LIVE_PHOTOMETRY") }
+            ),
+            AppModuleItem(
+                id = "gaia_rescue",
+                title = "Salvare Fals-Pozitive (Gaia De-Blender)",
+                subtitle = "Separare fotometrică stele de fundal blenduite și validare tranzite",
+                icon = "🎯",
+                category = ModuleCategory.EXOPLANETS,
+                onClick = { onViewAdvancedLab("GAIA_RESCUE") }
+            ),
+            AppModuleItem(
+                id = "harmonic_stitcher",
+                title = "Multi-Sector Harmonic Stitcher",
+                subtitle = "Cusătură armonică între sectoare fotometrice TESS multiple",
+                icon = "🔄",
+                category = ModuleCategory.EXOPLANETS,
+                onClick = { onViewAdvancedLab("HARMONIC_STITCHER") }
+            ),
+
+            // 2. TELESCOPES & SKY
+            AppModuleItem(
+                id = "smart_scope",
+                title = "Smart Scope Sync (Seestar & DWARF)",
+                subtitle = "Protocol auto-discovery rețea, ASCOM Alpaca și telemetrie montură",
+                icon = "📡",
+                category = ModuleCategory.TELESCOPES,
+                badge = "HARDWARE",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("SMART_SCOPE") }
+            ),
+            AppModuleItem(
+                id = "telescope_goto",
+                title = "Control Montură Telescop GoTo",
+                subtitle = "Comenzi fizice motoare pas-cu-pas, slew rate și sincronizare coordonate RA/DEC",
+                icon = "🔭",
+                category = ModuleCategory.TELESCOPES,
+                onClick = { onViewAdvancedLab("TELESCOPE_GOTO") }
+            ),
+            AppModuleItem(
+                id = "sky_radar",
+                title = "Radar Cer & Numărătoare Tranzite",
+                subtitle = "Ephemeride GPS locale: orare de intrare/ieșire din tranzit și vizibilitate",
+                icon = "🛰️",
+                category = ModuleCategory.TELESCOPES,
+                badge = "GPS LIVE",
+                onClick = { onViewAdvancedLab("SKY_RADAR") }
+            ),
+            AppModuleItem(
+                id = "ar_sky_camera",
+                title = "AR Sky Camera (Realitate Augmentată)",
+                subtitle = "Harta cerului suprapusă peste camera foto folosind giroscopul și busola",
+                icon = "📷",
+                category = ModuleCategory.TELESCOPES,
+                onClick = { onViewAdvancedLab("AR_SKY_CAMERA") }
+            ),
+            AppModuleItem(
+                id = "telescope_vision",
+                title = "Viziune Artificială Ghidaj Telescop",
+                subtitle = "Focalizare automată (FWHM), detectare centroid stea de ghidaj pe senzor",
+                icon = "👁️",
+                category = ModuleCategory.TELESCOPES,
+                onClick = { onViewAdvancedLab("TELESCOPE_VISION") }
+            ),
+
+            // 3. SPECTROSCOPY & PLANETARY PHYSICS
+            AppModuleItem(
+                id = "jwst_spectroscopy",
+                title = "Spectroscopie Transmisie JWST",
+                subtitle = "Spectre NIRSpec & NIRISS: profile de absorbție H₂O, CO₂, CH₄ și CO",
+                icon = "🌈",
+                category = ModuleCategory.SPECTROSCOPY,
+                badge = "JWST",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("JWST_SPECTROSCOPY") }
+            ),
+            AppModuleItem(
+                id = "climate_simulator",
+                title = "Simulator Climateric 1D Exoplanete",
+                subtitle = "Model radiativ-convectiv Manabe-Wetherald: insolație, CO₂ și albedo",
+                icon = "☀️",
+                category = ModuleCategory.SPECTROSCOPY,
+                onClick = { onViewAdvancedLab("CLIMATE_SIMULATOR") }
+            ),
+            AppModuleItem(
+                id = "biosignatures",
+                title = "Astrobiologie & Tehnosemnături",
+                subtitle = "Analiză biosfere, compoziție atmosferică disonantă și semnale narrowband",
+                icon = "🧬",
+                category = ModuleCategory.SPECTROSCOPY,
+                onClick = { onViewAdvancedLab("BIOSIGNATURES") }
+            ),
+            AppModuleItem(
+                id = "plato_astero",
+                title = "Asteroseismologie Misiunea PLATO",
+                subtitle = "Oscilații p-mode stelare (Δν, νmax), determinare masă, rază și vârstă stea",
+                icon = "⭐",
+                category = ModuleCategory.SPECTROSCOPY,
+                badge = "ESA PLATO",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("PLATO_ASTEROSEISMOLOGY") }
+            ),
+            AppModuleItem(
+                id = "roman_microlensing",
+                title = "Microlentile Nancy Grace Roman",
+                subtitle = "Detecție planete vagaboande (rogue) prin curbarea gravitațională a luminii",
+                icon = "🔍",
+                category = ModuleCategory.SPECTROSCOPY,
+                badge = "ROMAN",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("ROMAN_MICROLENSING") }
+            ),
+            AppModuleItem(
+                id = "exomoon_tidal",
+                title = "Exoluni & Oceane Mareice Subglaciare",
+                subtitle = "Disipare flux termic mareic și habitabilitate în oceane subglaciare",
+                icon = "🌕",
+                category = ModuleCategory.SPECTROSCOPY,
+                badge = "EXOLUNI",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("EXOMOON_TIDAL") }
+            ),
+
+            // 4. COSMOLOGY & EARTH SCIENCES
+            AppModuleItem(
+                id = "big_bang",
+                title = "Modelul Cosmologic Big Bang (FLRW)",
+                subtitle = "Metrica Friedmann-Lemaître, nucleosinteză primordială, CMB și epoca reionizării",
+                icon = "💥",
+                category = ModuleCategory.COSMOLOGY,
+                badge = "COSMOLOGIE",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("BIG_BANG_COSMOLOGY") }
+            ),
+            AppModuleItem(
+                id = "black_holes",
+                title = "Găuri Negre & Relativitate Kerr",
+                subtitle = "Metrica Kerr rotativă, orizontul evenimentelor, orbita ISCO & raza umbrei",
+                icon = "🕳️",
+                category = ModuleCategory.COSMOLOGY,
+                badge = "RELATIVITATE",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("BLACK_HOLES") }
+            ),
+            AppModuleItem(
+                id = "terra_frontier",
+                title = "TERRA INCOGNITA: Deep Earth & Oceans",
+                subtitle = "Anomalia Magnetică SAA, structura mantalei terestre și fosele oceanice hadale",
+                icon = "🌍",
+                category = ModuleCategory.COSMOLOGY,
+                badge = "GEODINAMICĂ",
+                is2026New = true,
+                onClick = onViewTerraFrontier
+            ),
+            AppModuleItem(
+                id = "space_weather",
+                title = "Vreme Spațială & Magnetosferă",
+                subtitle = "Indici Kp, vânt solar, furtuni geomagnetice și comprimare magnetosferică",
+                icon = "🛡️",
+                category = ModuleCategory.COSMOLOGY,
+                badge = "NOAA SWPC",
+                is2026New = true,
+                onClick = { onViewAdvancedLab("SPACE_WEATHER") }
+            ),
+            AppModuleItem(
+                id = "research_archive",
+                title = "Arhivă Cercetări Offline (Room DB)",
+                subtitle = "Bază de date locală persistentă pentru rapoarte de analiză și sinteze",
+                icon = "💾",
+                category = ModuleCategory.COSMOLOGY,
+                badge = "ROOM DB",
+                onClick = onViewResearchArchive
+            )
+        )
+    }
+
+    // Filter modules by category and query
+    val filteredModules = remember(searchQuery, selectedCategory, allModules) {
+        allModules.filter { item ->
+            val matchesCategory = (selectedCategory == ModuleCategory.ALL) || (item.category == selectedCategory)
+            val matchesQuery = if (searchQuery.isBlank()) {
+                true
+            } else {
+                val q = searchQuery.trim().lowercase()
+                item.title.lowercase().contains(q) ||
+                        item.subtitle.lowercase().contains(q) ||
+                        (item.badge?.lowercase()?.contains(q) ?: false)
+            }
+            matchesCategory && matchesQuery
+        }
     }
 
     Scaffold(
@@ -79,7 +342,7 @@ fun HomeScreen(
                                     shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Text(
-                                        "v2026.3",
+                                        "v1.6.3",
                                         color = AccentCyan,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
@@ -97,22 +360,28 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = onViewAdvancedLab,
+                        onClick = {
+                            viewModel.triggerLiveSync(context)
+                            viewModel.loadSyncInfo(context)
+                            android.widget.Toast.makeText(
+                                context,
+                                "Sincronizare date externe (NASA, MAST, Gaia, JPL) actualizată!",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        modifier = Modifier.testTag("top_refresh_button")
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reîmprospătează date externe",
+                            tint = AccentCyan
+                        )
+                    }
+                    IconButton(
+                        onClick = { onViewAdvancedLab(null) },
                         modifier = Modifier.testTag("top_lab_button")
                     ) {
                         Icon(Icons.Default.Biotech, contentDescription = "Discovery Lab", tint = AccentGreen)
-                    }
-                    IconButton(
-                        onClick = onViewDeepHunt,
-                        modifier = Modifier.testTag("top_deep_hunt_button")
-                    ) {
-                        Icon(Icons.Default.Bolt, contentDescription = "Deep Hunt", tint = AccentAmber)
-                    }
-                    IconButton(
-                        onClick = onViewXilonDiscovery,
-                        modifier = Modifier.testTag("top_xilon_button")
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = "Xilon Discovery", tint = AccentCyan)
                     }
                     IconButton(
                         onClick = onViewResearchArchive,
@@ -141,7 +410,7 @@ fun HomeScreen(
                 )
                 NavigationBarItem(
                     selected = false,
-                    onClick = onViewAdvancedLab,
+                    onClick = { onViewAdvancedLab(null) },
                     icon = { Icon(Icons.Default.Biotech, contentDescription = "Lab", tint = AccentGreen) },
                     label = { Text("Lab & Cosmo", style = MaterialTheme.typography.labelSmall, color = TextSecondary) }
                 )
@@ -194,164 +463,122 @@ fun HomeScreen(
                 )
             }
 
-            // 1.5 SLEEK HORIZONTAL SYSTEM STATUS ROW
+            // 2. SLEEK SYSTEM STATUS ROW
             item {
                 ModernSystemStatusBar(status = systemStatus)
             }
 
-            // 2. LUXURY 2026/27 HERO CARD (Clean, balanced, modern)
+            // 3. CATALOG & QUICK DISCOVERY DIRECT ACCESS (SOLVES COMPLEX NAVIGATION)
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onViewAdvancedLab() },
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Brush.horizontalGradient(listOf(AccentCyan, AccentMagenta, AccentAmber))),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
-                                )
-                            )
-                            .padding(18.dp)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🌌", fontSize = 18.sp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    "LABORATORUL ASTROFIZIC",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Surface(
-                                color = AccentCyan.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    "9 MOTOARE NOI",
-                                    color = AccentCyan,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Simulare Big Bang & inflație FLRW, fizica relativistă a găurilor negre Kerr, sincronizare Smart Scope și spectroscopie de transmisie JWST.",
-                            color = TextSecondary,
-                            style = MaterialTheme.typography.bodyMedium,
-                            lineHeight = 20.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Button(
-                            onClick = onViewAdvancedLab,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AccentCyan,
-                                contentColor = Color.Black
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Column {
                             Text(
-                                "DESCHIDE TOATE CELE 16 MODULE",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
+                                "CATALOG COMPLET MODULE (${allModules.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text(
+                                "Apasă pe orice modul pentru deschidere directă imediată",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Instant Search Box
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Caută modul (ex: FITS, JWST, Seestar, Gaia, GoTo, Kerr...)", fontSize = 13.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = "Caută", tint = AccentCyan, modifier = Modifier.size(20.dp))
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "Șterge", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = DarkSurface,
+                            unfocusedContainerColor = DarkSurface,
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = Color(0xFF1E293B),
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Category Filter Chips
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(ModuleCategory.values()) { cat ->
+                            val isSelected = selectedCategory == cat
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedCategory = cat },
+                                label = { Text("${cat.icon} ${cat.label}", fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AccentCyan,
+                                    selectedLabelColor = Color.Black,
+                                    containerColor = DarkSurface,
+                                    labelColor = TextSecondary
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    borderColor = if (isSelected) AccentCyan else Color(0xFF1E293B)
+                                )
+                            )
                         }
                     }
                 }
             }
 
-            // 3. CORE MODULES 2x2 GRID
-            item {
-                Text(
-                    "HUB-URI DE CERCETARE & INSTRUMENTE",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ModuleQuickCard(
-                        modifier = Modifier.weight(1f),
-                        icon = "🌌",
-                        title = "Big Bang & Găuri Negre",
-                        subtitle = "FLRW, CMB, Sgr A* & Kerr",
-                        accentColor = AccentMagenta,
-                        onClick = onViewAdvancedLab
-                    )
-                    ModuleQuickCard(
-                        modifier = Modifier.weight(1f),
-                        icon = "📡",
-                        title = "Smart Scope & GoTo",
-                        subtitle = "Seestar, DWARF, ASCOM",
-                        accentColor = AccentGreen,
-                        onClick = onViewAdvancedLab
-                    )
+            // 4. DISPLAY FILTERED MODULE CARDS
+            if (filteredModules.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Niciun modul găsit pentru \"$searchQuery\"", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { searchQuery = ""; selectedCategory = ModuleCategory.ALL }) {
+                                Text("Afișează toate modulele", color = AccentCyan)
+                            }
+                        }
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ModuleQuickCard(
-                        modifier = Modifier.weight(1f),
-                        icon = "⚡",
-                        title = "Deep Hunt (TESS)",
-                        subtitle = "Mono-tranzite & Lumi Noi",
-                        accentColor = AccentAmber,
-                        onClick = onViewDeepHunt
-                    )
-                    ModuleQuickCard(
-                        modifier = Modifier.weight(1f),
-                        icon = "✨",
-                        title = "Xilon AI",
-                        subtitle = "Descoperire Autonomă",
-                        accentColor = AccentCyan,
-                        onClick = onViewXilonDiscovery
-                    )
+            } else {
+                items(filteredModules) { module ->
+                    ModuleCatalogItemCard(module = module)
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                ModuleQuickCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = "🌍",
-                    title = "TERRA INCOGNITA: Deep Earth & Oceans",
-                    subtitle = "Oceane Hadale, Mantaua Terrei & Anomalia SAA",
-                    accentColor = Color(0xFF00E5FF),
-                    onClick = onViewTerraFrontier
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                ModuleQuickCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = "💾",
-                    title = "ARHIVĂ CERCETĂRI (ROOM DATABASE)",
-                    subtitle = "Bază de Date Locală Offline: Sinteze JWST, Roman & PLATO",
-                    accentColor = AccentGreen,
-                    onClick = onViewResearchArchive
-                )
             }
 
-            // 4. ACTIVE INVESTIGATIONS LIST / ELEGANT EMPTY STATE
+            // 5. ACTIVE INVESTIGATIONS SECTION
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -386,28 +613,28 @@ fun HomeScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(24.dp),
+                                .padding(20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = AccentCyan.copy(alpha = 0.1f),
-                                modifier = Modifier.size(52.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         Icons.Default.Explore,
                                         contentDescription = null,
                                         tint = AccentCyan,
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 "Nicio investigație în desfășurare",
                                 color = Color.White,
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -416,9 +643,9 @@ fun HomeScreen(
                                 color = TextSecondary,
                                 style = MaterialTheme.typography.bodySmall,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                lineHeight = 18.sp
+                                lineHeight = 16.sp
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             OutlinedButton(
                                 onClick = onNewInvestigation,
                                 shape = RoundedCornerShape(8.dp),
@@ -439,6 +666,81 @@ fun HomeScreen(
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
+    }
+}
+
+@Composable
+fun ModuleCatalogItemCard(module: AppModuleItem) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = module.onClick),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color(0xFF1E293B))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF1E293B),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(module.icon, fontSize = 20.sp)
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        module.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (module.badge != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = AccentCyan.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                module.badge,
+                                color = AccentCyan,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    module.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = "Deschide",
+                tint = AccentCyan,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -474,65 +776,6 @@ fun StatusPill(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
-    }
-}
-
-@Composable
-fun ModuleQuickCard(
-    modifier: Modifier = Modifier,
-    icon: String,
-    title: String,
-    subtitle: String,
-    accentColor: Color,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier
-            .height(104.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(icon, fontSize = 20.sp)
-                Icon(
-                    Icons.Default.ArrowForward,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            Column {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
     }
 }
 

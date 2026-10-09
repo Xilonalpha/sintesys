@@ -1,5 +1,8 @@
 package com.synthesis.ui.screens.xilon
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -12,15 +15,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
@@ -45,7 +53,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import com.synthesis.data.local.entity.XilonDiscoveryEntity
 import com.synthesis.data.service.gemini.GeminiAnalysisResult
 import com.synthesis.domain.model.xilon.*
@@ -118,8 +134,12 @@ fun XilonDiscoveryScreen(
                             tint = if (isApiKeySet) AccentCyan else AccentAmber
                         )
                     }
-                    IconButton(onClick = { viewModel.resetToIdle() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = TextPrimary)
+                    IconButton(onClick = {
+                        val target = ticInput.trim().ifBlank { "25155310" }
+                        viewModel.runScan(target)
+                        Toast.makeText(context, "Reîmprospătare date fotometrice MAST & cataloage NASA pentru TIC $target...", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reîmprospătează date MAST/NASA", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -1559,7 +1579,19 @@ fun GeminiAstrophysicistChatCard(
     isResponding: Boolean,
     onSendMessage: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
+    var showFullscreenChatDialog by remember { mutableStateOf(false) }
+    var isInlineHeightUnlimited by remember { mutableStateOf(true) }
+    val chatScrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Automatically scroll to latest message
+    LaunchedEffect(messages.size, isResponding) {
+        if (messages.isNotEmpty()) {
+            chatScrollState.animateScrollTo(chatScrollState.maxValue)
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1568,22 +1600,50 @@ fun GeminiAstrophysicistChatCard(
         border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.4f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.SmartToy, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(
-                        "DISCUTĂ CU ASTROFIZICIANUL NEURONAL",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        Icons.Default.SmartToy,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(22.dp)
                     )
-                    Text(
-                        "Întreabă Gemini 3.5 despre natura acestei planete în timp real",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = 11.sp
-                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            "DISCUTĂ CU ASTROFIZICIANUL NEURONAL",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Gemini 3.5 analizează fizica stelară și tranzitul în timp real",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { showFullscreenChatDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentCyan.copy(alpha = 0.2f),
+                        contentColor = AccentCyan
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Default.OpenInFull, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("ECRAN COMPLET", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -1608,15 +1668,68 @@ fun GeminiAstrophysicistChatCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Message history
-            Column(
-                modifier = Modifier
+            // Scroll helper & expand header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (messages.isEmpty()) "Mesaje" else "${messages.size} mesaje în conversație",
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = { isInlineHeightUnlimited = !isInlineHeightUnlimited },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            if (isInlineHeightUnlimited) "Restrânge înălțimea ▲" else "Extinde înălțimea ▼",
+                            color = AccentCyan,
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (messages.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    chatScrollState.animateScrollTo(chatScrollState.maxValue)
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowDownward,
+                                contentDescription = "Mergi jos",
+                                tint = AccentCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Message history container
+            val containerModifier = if (isInlineHeightUnlimited) {
+                Modifier
                     .fillMaxWidth()
                     .background(DarkBackground, RoundedCornerShape(8.dp))
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(10.dp)
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 160.dp, max = 380.dp)
+                    .background(DarkBackground, RoundedCornerShape(8.dp))
+                    .verticalScroll(chatScrollState)
+                    .padding(10.dp)
+            }
+
+            Column(
+                modifier = containerModifier,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (messages.isEmpty()) {
                     Text(
@@ -1626,30 +1739,98 @@ fun GeminiAstrophysicistChatCard(
                         fontSize = 12.sp
                     )
                 } else {
-                    messages.takeLast(6).forEach { msg ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start
-                        ) {
-                            Surface(
-                                color = if (msg.isUser) AccentCyan else Color(0xFF1E293B),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.widthIn(max = 280.dp)
+                    messages.forEach { msg ->
+                        if (msg.isUser) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
                             ) {
-                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                                    Text(
-                                        msg.sender,
-                                        color = if (msg.isUser) Color.Black else AccentCyan,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp
-                                    )
-                                    Text(
-                                        msg.text,
-                                        color = if (msg.isUser) Color.Black else TextPrimary,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontSize = 12.sp
-                                    )
+                                Surface(
+                                    color = AccentCyan,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.widthIn(max = 280.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                        Text(
+                                            msg.sender,
+                                            color = Color.Black,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        )
+                                        SelectionContainer {
+                                            Text(
+                                                msg.text,
+                                                color = Color.Black,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // AI Message: Full width with expand toggle so multi-paragraph responses are 100% readable
+                            var isMsgExpanded by remember { mutableStateOf(false) }
+                            Surface(
+                                color = Color(0xFF1E293B),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Color(0xFF334155)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                msg.sender,
+                                                color = AccentCyan,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(ClipData.newPlainText("Gemini AI Analysis", msg.text))
+                                                Toast.makeText(context, "Răspuns copiat!", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = "Copiază răspuns", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    SelectionContainer {
+                                        Text(
+                                            msg.text,
+                                            color = TextPrimary,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontSize = 12.sp,
+                                            lineHeight = 18.sp,
+                                            maxLines = if (isMsgExpanded || isInlineHeightUnlimited) Int.MAX_VALUE else 10,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (msg.text.length > 250 && !isInlineHeightUnlimited) {
+                                        TextButton(
+                                            onClick = { isMsgExpanded = !isMsgExpanded },
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Text(
+                                                if (isMsgExpanded) "▲ Restrânge textul" else "▼ Citește tot mesajul (${msg.text.length} caractere)",
+                                                color = AccentCyan,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1698,6 +1879,362 @@ fun GeminiAstrophysicistChatCard(
                     modifier = Modifier.background(AccentCyan, RoundedCornerShape(8.dp))
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Trimite", tint = Color.Black)
+                }
+            }
+        }
+    }
+
+    // Fullscreen/Dedicated chat dialog for completely unrestricted reading & scrolling
+    if (showFullscreenChatDialog) {
+        GeminiFullscreenChatDialog(
+            targetName = "TIC ${res.star.ticId}",
+            messages = messages,
+            isResponding = isResponding,
+            onDismiss = { showFullscreenChatDialog = false },
+            onSendMessage = onSendMessage
+        )
+    }
+}
+
+/**
+ * Dedicated Fullscreen Dialog for Gemini AI Astrophysicist Chat.
+ * Provides unrestricted, buttery-smooth vertical scrolling, edge-to-edge layout,
+ * copy-all shortcut, and comfortable text reading.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GeminiFullscreenChatDialog(
+    targetName: String,
+    messages: List<XilonAiChatMessage>,
+    isResponding: Boolean,
+    onDismiss: () -> Unit,
+    onSendMessage: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var dialogInputText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(messages.size, isResponding) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = DarkBackground
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(AccentGreen, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "Chat Astrofizic Gemini AI",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            color = AccentCyan.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                "3.5 Flash",
+                                                color = AccentCyan,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        "Țintă: $targetName • Derivări fizice & Vetting tranzit",
+                                        color = TextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.Default.Close, contentDescription = "Închide", tint = Color.White)
+                            }
+                        },
+                        actions = {
+                            if (messages.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    val fullLog = messages.joinToString("\n\n") { "${it.sender}:\n${it.text}" }
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Gemini Chat Transcript", fullLog))
+                                    Toast.makeText(context, "Tot istoricul conversației a fost copiat!", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copiază tot", tint = AccentCyan)
+                                }
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F172A))
+                    )
+                },
+                bottomBar = {
+                    Surface(
+                        color = Color(0xFF0F172A),
+                        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            // Suggestion chips row inside fullscreen chat
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                SuggestionChip(
+                                    onClick = { onSendMessage("Ce temperatură de echilibru Teq și compoziție are această planetă?") },
+                                    label = { Text("Teq & Compoziție?", fontSize = 11.sp) }
+                                )
+                                SuggestionChip(
+                                    onClick = { onSendMessage("Care este probabilitatea de fals pozitiv (binară eclipsantă blenduită)?") },
+                                    label = { Text("Fals Pozitiv?", fontSize = 11.sp) }
+                                )
+                                SuggestionChip(
+                                    onClick = { onSendMessage("Explică derivarea masei folosind legea Chen & Kipping (2017)") },
+                                    label = { Text("Masa Chen-Kipping?", fontSize = 11.sp) }
+                                )
+                            }
+
+                            // Input row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = dialogInputText,
+                                    onValueChange = { dialogInputText = it },
+                                    placeholder = { Text("Întreabă Gemini 3.5 orice despre această stea...", fontSize = 13.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 4,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Color(0xFF1E293B),
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary
+                                    )
+                                )
+
+                                IconButton(
+                                    onClick = {
+                                        if (dialogInputText.isNotBlank()) {
+                                            val q = dialogInputText.trim()
+                                            dialogInputText = ""
+                                            onSendMessage(q)
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .background(AccentCyan, RoundedCornerShape(10.dp))
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = "Trimite",
+                                        tint = Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            ) { padding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .background(DarkBackground)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (messages.isEmpty()) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(
+                                            "🌌 Asistent Astrofizic Gemini 3.5 Online",
+                                            fontWeight = FontWeight.Bold,
+                                            color = AccentCyan,
+                                            fontSize = 15.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            "Pune orice întrebare despre semnalul fotometric MAST, modelul analitic Mandel-Agol, atmosfera acestei planete sau instrumentele JWST NIRSpec.",
+                                            color = TextSecondary,
+                                            fontSize = 13.sp,
+                                            lineHeight = 18.sp
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            items(messages) { msg ->
+                                if (msg.isUser) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        Surface(
+                                            color = AccentCyan,
+                                            shape = RoundedCornerShape(14.dp),
+                                            modifier = Modifier.widthIn(max = 320.dp)
+                                        ) {
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                Text(
+                                                    msg.sender,
+                                                    color = Color.Black,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                SelectionContainer {
+                                                    Text(
+                                                        msg.text,
+                                                        color = Color.Black,
+                                                        fontSize = 14.sp,
+                                                        lineHeight = 20.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Surface(
+                                        color = Color(0xFF1E293B),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF334155)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        Icons.Default.AutoAwesome,
+                                                        contentDescription = null,
+                                                        tint = AccentCyan,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        msg.sender,
+                                                        color = AccentCyan,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 12.sp
+                                                    )
+                                                }
+                                                IconButton(
+                                                    onClick = {
+                                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                        clipboard.setPrimaryClip(ClipData.newPlainText("Gemini Message", msg.text))
+                                                        Toast.makeText(context, "Răspuns copiat!", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ContentCopy,
+                                                        contentDescription = "Copiază",
+                                                        tint = TextSecondary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            SelectionContainer {
+                                                Text(
+                                                    msg.text,
+                                                    color = TextPrimary,
+                                                    fontSize = 14.sp,
+                                                    lineHeight = 22.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isResponding) {
+                            item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = AccentCyan,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        "Gemini 3.5 AI formulează răspunsul astrofizic detaliat...",
+                                        color = TextSecondary,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                    }
+
+                    // Floating jump-to-bottom button
+                    if (messages.size > 2) {
+                        FloatingActionButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(messages.size - 1)
+                                }
+                            },
+                            containerColor = AccentCyan,
+                            contentColor = Color.Black,
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                                .size(40.dp)
+                        ) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = "Mergi jos", modifier = Modifier.size(18.dp))
+                        }
+                    }
                 }
             }
         }

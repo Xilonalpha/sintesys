@@ -23,7 +23,13 @@ fun SynthesisNavHost(
                 onViewExoplanets = { navController.navigate("exoplanets") },
                 onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
                 onViewDeepHunt = { navController.navigate("deep_hunt") },
-                onViewAdvancedLab = { navController.navigate("advanced_lab") },
+                onViewAdvancedLab = { tab ->
+                    if (tab != null) {
+                        navController.navigate("advanced_lab?tab=$tab")
+                    } else {
+                        navController.navigate("advanced_lab")
+                    }
+                },
                 onViewTerraFrontier = { navController.navigate("terra_frontier") },
                 onViewResearchArchive = { navController.navigate("research_archive") }
             )
@@ -109,6 +115,27 @@ fun SynthesisNavHost(
         composable("deep_hunt") {
             DeepHuntScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            "advanced_lab?tab={tab}",
+            arguments = listOf(navArgument("tab") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            })
+        ) { backStackEntry ->
+            val tabStr = backStackEntry.arguments?.getString("tab")
+            val tab = tabStr?.let {
+                try {
+                    com.synthesis.viewmodel.exoplanet.AdvancedTab.valueOf(it)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            AdvancedDiscoveryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                initialTab = tab
             )
         }
         composable("advanced_lab") {

@@ -57,7 +57,7 @@ fun TelescopeCameraVisionView(
     val context = LocalContext.current
     var isSelectTargetMode by remember { mutableStateOf(true) }
     var showApertureSettings by remember { mutableStateOf(false) }
-    var chartMode by remember { mutableStateOf(1) } // 0: Canvas Nativ, 1: Recharts Interactiv
+    var chartMode by remember { mutableStateOf(0) } // 0: Canvas Nativ, 1: Recharts Interactiv
 
     var apertureSlider by remember { mutableStateOf(visionState.apertureRadiusPix) }
     var skyInSlider by remember { mutableStateOf(visionState.skyInnerRadiusPix) }

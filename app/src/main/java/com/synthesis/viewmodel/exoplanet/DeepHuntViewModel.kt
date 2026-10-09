@@ -51,7 +51,7 @@ class DeepHuntViewModel @Inject constructor(
         _selectedTab.value = tab
     }
 
-    private fun loadData() {
+    fun loadData() {
         _monoTransits.value = repository.getCuratedMonoTransits()
         _ttvSystems.value = repository.getCuratedTtvSystems()
         _atmosphericScores.value = repository.getTopAtmosphericTsmScores()

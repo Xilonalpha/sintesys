@@ -93,6 +93,15 @@ fun TerraFrontierScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
+                actions = {
+                    IconButton(onClick = { viewModel.refreshData() }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reîmprospătează telemetrie",
+                            tint = AccentCyan
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         }

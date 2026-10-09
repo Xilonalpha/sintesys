@@ -175,6 +175,13 @@ class TerraFrontierViewModel @Inject constructor(
         _selectedBedrockFeature.value = feature
     }
 
+    fun refreshData() {
+        _allMysteries.value = engine.getFrontierMysteries()
+        _pipelineStages.value = engine.getInitialPipelineStages()
+        _telemetryFeeds.value = engine.getRealtimeTelemetryFeeds()
+        _deepSubductionEventsCount.value = 42 + (System.currentTimeMillis() % 15).toInt()
+    }
+
     fun updateIceMeltSlider(fraction: Float) {
         _iceMeltFraction.value = fraction
     }

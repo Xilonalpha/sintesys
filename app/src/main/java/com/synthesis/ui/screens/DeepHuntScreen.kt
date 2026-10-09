@@ -69,6 +69,16 @@ fun DeepHuntScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        viewModel.loadData()
+                        Toast.makeText(context, "Date TESS & Blindspots reîmprospătate din arhivă!", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reîmprospătează date TESS",
+                            tint = Color.White
+                        )
+                    }
                     IconButton(onClick = { showSolverDialog = true }) {
                         Icon(
                             Icons.Default.Calculate,

@@ -171,6 +171,7 @@ fun RechartsWebViewDashboard(
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
+                setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.loadWithOverviewMode = true
