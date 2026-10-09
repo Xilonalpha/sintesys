@@ -8,6 +8,7 @@ import com.synthesis.data.remote.api.MastExoApi
 import com.synthesis.data.remote.api.MastPortalApi
 import com.synthesis.domain.model.xilon.*
 import com.synthesis.engine.xilon.XilonTransitDetector
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -201,6 +202,8 @@ class XilonRepository @Inject constructor(
                     dvTsnr = hdr.get("TSNR")?.takeIf { !it.isJsonNull }?.asDouble
                     dvTperiod = hdr.get("TPERIOD")?.takeIf { !it.isJsonNull }?.asDouble
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Non-fatal if info endpoint is not available
             }
@@ -246,6 +249,8 @@ class XilonRepository @Inject constructor(
             )
 
             Result.success(result)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -273,6 +278,8 @@ class XilonRepository @Inject constructor(
                     isBenchmarkTarget = true
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Ignore network or table query error and proceed to TOI check
         }
@@ -296,6 +303,8 @@ class XilonRepository @Inject constructor(
                     isBenchmarkTarget = false
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Ignore
         }
@@ -354,6 +363,8 @@ class XilonRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Star TIC $ticId not found in MAST catalog."))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

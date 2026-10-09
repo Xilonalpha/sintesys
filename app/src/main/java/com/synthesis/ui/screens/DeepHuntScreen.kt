@@ -38,9 +38,16 @@ fun DeepHuntScreen(
     val ttvSystems by viewModel.ttvSystems.collectAsState()
     val atmosphericScores by viewModel.atmosphericScores.collectAsState()
     val neglectedJewels by viewModel.neglectedJewels.collectAsState()
+    val scoutStatus by viewModel.scoutStatus.collectAsState()
+    val surveyCriteria by viewModel.surveyCriteria.collectAsState()
     val context = LocalContext.current
 
     var showSolverDialog by remember { mutableStateOf(false) }
+    var showCriteriaDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadScoutStatus(context)
+    }
 
     Scaffold(
         topBar = {
@@ -127,11 +134,36 @@ fun DeepHuntScreen(
                         Toast.makeText(context, "Sinteza '${candidate.candidateName}' a fost salvată în Baza de Date Room!", Toast.LENGTH_SHORT).show()
                     }
                 )
+                DeepHuntTab.TESS_SURVEY_SCOUT -> TessSurveyScoutView(
+                    status = scoutStatus,
+                    criteria = surveyCriteria,
+                    onTriggerImmediate = {
+                        viewModel.triggerImmediateSurvey(context)
+                        Toast.makeText(context, "Sondaj TESS inițiat în fundal prin WorkManager!", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenCriteria = { showCriteriaDialog = true },
+                    onTogglePeriodic = { enabled ->
+                        viewModel.togglePeriodicScout(context, enabled)
+                        Toast.makeText(context, if (enabled) "Sondaj periodic TESS activat (la fiecare 6 ore)" else "Sondaj periodic oprit", Toast.LENGTH_SHORT).show()
+                    }
+                )
                 DeepHuntTab.TTV_INVERSION -> TtvInversionView(ttvSystems)
                 DeepHuntTab.ATMOSPHERIC_TSM -> AtmosphericTsmView(atmosphericScores)
                 DeepHuntTab.NEGLECTED_JEWELS -> NeglectedJewelsView(neglectedJewels)
             }
         }
+    }
+
+    if (showCriteriaDialog) {
+        TessSurveyCriteriaDialog(
+            initialCriteria = surveyCriteria,
+            onDismiss = { showCriteriaDialog = false },
+            onSave = { updatedCriteria ->
+                viewModel.updateSurveyCriteria(context, updatedCriteria)
+                showCriteriaDialog = false
+                Toast.makeText(context, "Criterii de filtrare TESS salvate!", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     if (showSolverDialog) {
@@ -641,6 +673,305 @@ private fun SingleTransitSolverDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("CANCEL", color = TextSecondary) }
+        }
+    )
+}
+
+@Composable
+fun TessSurveyScoutView(
+    status: TessSurveyScoutStatus?,
+    criteria: TessSurveyCriteria,
+    onTriggerImmediate: () -> Unit,
+    onOpenCriteria: () -> Unit,
+    onTogglePeriodic: (Boolean) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "TESS AUTONOMOUS ARCHIVE SCOUT",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AccentCyan
+                            )
+                            Text(
+                                "Sondaj continuu în fundal • Android WorkManager",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+
+                        Surface(
+                            color = AccentGreen.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentGreen)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("SCOUT ACTIV (6h)", color = AccentGreen, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Modulul rulează periodic în fundal (chiar dacă aplicația este închisă), interoghează arhivele TESS și STScI/MAST pentru stele ce îndeplinesc criteriile fizice alese, rulează detectoarele fotometrice și emite alerte prin notificări de sistem dacă identifică un potențial tranzit exoplanetar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextPrimary,
+                        lineHeight = 18.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onTriggerImmediate,
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("SCANARE ACUM", fontSize = 11.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = onOpenCriteria,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("CRITERII FILTRARE", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Telemetry Grid
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("TELEMETRIE SONDAJ WORKMANAGER", style = MaterialTheme.typography.labelMedium, color = AccentCyan)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            color = Color(0xFF111827),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("ULTIMUL CICLU", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(status?.formattedLastRun ?: "Programat", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFF111827),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("STATUS EXECUȚIE", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(status?.lastRunStatus ?: "STANDBY", color = AccentGreen, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            color = Color(0xFF111827),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("STELE EVALUATE", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("${status?.totalStarsEvaluated ?: 0}", color = AccentAmber, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFF111827),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("TRANZITE SALVATE", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("${status?.discoveriesCount ?: 0}", color = AccentCyan, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+
+                    if (status?.lastDiscoveredTic != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            color = Color(0xFF0F172A),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Ultimul semnal notificat: TIC ${status.lastDiscoveredTic}", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Active Criteria Summary Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("CRITERII ACTIVE DE FILTRARE ASTROFIZICĂ", style = MaterialTheme.typography.labelMedium, color = AccentCyan)
+                        IconButton(onClick = onOpenCriteria) {
+                            Icon(Icons.Default.Edit, contentDescription = "Modifică", tint = AccentCyan, modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("• Prag Strălucire: Tmag ≤ ${criteria.maxTmag} (Stele luminoase pentru fotometrie curată)", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("• Semnificație Statistică: SNR ≥ ${criteria.minSnr}σ (Standardul de aur NASA)", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("• Adâncime Minimă Tranzit: ≥ ${criteria.minDepthPpm.toInt()} ppm (Exoplanete superioare zgomotului)", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("• Tip Stelar: ${if (criteria.dwarfStarsOnly) "Doar Stele Pitice M/K/G (R* ≤ 1.35 R☉)" else "Orice rază stelară"}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("• Ținte Prioritare: ${if (criteria.unvettedNonToiPreferred) "Candidat Virgin din Arhiva TESS / Blindspots" else "Catalog Mixt"}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("• Cadență Scanare: ${criteria.scanBatchSize} stele per ciclu de fundal", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TessSurveyCriteriaDialog(
+    initialCriteria: TessSurveyCriteria,
+    onDismiss: () -> Unit,
+    onSave: (TessSurveyCriteria) -> Unit
+) {
+    var maxMag by remember { mutableStateOf(initialCriteria.maxTmag.toString()) }
+    var minSnr by remember { mutableStateOf(initialCriteria.minSnr.toString()) }
+    var minDepth by remember { mutableStateOf(initialCriteria.minDepthPpm.toString()) }
+    var dwarfOnly by remember { mutableStateOf(initialCriteria.dwarfStarsOnly) }
+    var unvettedOnly by remember { mutableStateOf(initialCriteria.unvettedNonToiPreferred) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Configurare Criterii Sondaj TESS", color = AccentCyan) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Configurează parametrii astrofizici după care robotul WorkManager va scana noile arhive TESS în fundal:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+
+                OutlinedTextField(
+                    value = maxMag,
+                    onValueChange = { maxMag = it },
+                    label = { Text("Magnitudine Maximă (Tmag)") },
+                    supportingText = { Text("Implicit 12.0 (mai mic = stea mai strălucitoare)") }
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = minSnr,
+                        onValueChange = { minSnr = it },
+                        label = { Text("Min SNR (σ)") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = minDepth,
+                        onValueChange = { minDepth = it },
+                        label = { Text("Min Adâncime (ppm)") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = dwarfOnly, onCheckedChange = { dwarfOnly = it })
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Doar stele pitice (R* ≤ 1.35 R☉)", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = unvettedOnly, onCheckedChange = { unvettedOnly = it })
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Prioritizează stele virgine / Non-TOI", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val criteria = TessSurveyCriteria(
+                        maxTmag = maxMag.toDoubleOrNull() ?: 12.0,
+                        minSnr = minSnr.toDoubleOrNull() ?: 7.1,
+                        minDepthPpm = minDepth.toDoubleOrNull() ?: 400.0,
+                        dwarfStarsOnly = dwarfOnly,
+                        unvettedNonToiPreferred = unvettedOnly,
+                        scanBatchSize = initialCriteria.scanBatchSize
+                    )
+                    onSave(criteria)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black)
+            ) {
+                Text("SALVEAZĂ CRITERII")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("ANULEAZĂ", color = TextSecondary) }
         }
     )
 }

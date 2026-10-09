@@ -124,10 +124,11 @@ fun RechartsLightCurveSampleView(
 @Composable
 fun XilonDetectionRechartsView(
     res: com.synthesis.domain.model.xilon.XilonDetectionResult,
+    dipReport: com.synthesis.domain.model.exoplanet.TransitDipScanReport? = null,
     modifier: Modifier = Modifier
 ) {
-    val htmlContent = remember(res) {
-        RechartsLightCurveHtmlBuilder.buildHtmlFromXilonDetection(res)
+    val htmlContent = remember(res, dipReport) {
+        RechartsLightCurveHtmlBuilder.buildHtmlFromXilonDetection(res, dipReport)
     }
 
     Card(

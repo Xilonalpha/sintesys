@@ -58,6 +58,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.ui.geometry.Size
+import com.synthesis.domain.model.exoplanet.DetectedDipSignal
+import com.synthesis.domain.model.exoplanet.TransitDipScanReport
+import com.synthesis.domain.model.exoplanet.DipShapeClassification
+import com.synthesis.domain.model.exoplanet.DipRecurrenceVerdict
 import androidx.compose.ui.window.Dialog
 import com.synthesis.ui.components.exoplanet.XilonDetectionRechartsView
 import androidx.compose.ui.window.DialogProperties
@@ -72,6 +81,7 @@ import com.synthesis.viewmodel.xilon.XilonAiChatMessage
 import com.synthesis.viewmodel.xilon.XilonUiState
 import com.synthesis.viewmodel.xilon.XilonViewModel
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +96,10 @@ fun XilonDiscoveryScreen(
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isChatResponding by viewModel.isChatResponding.collectAsState()
     val isApiKeySet by viewModel.isApiKeySet.collectAsState()
+    val dipReport by viewModel.dipScanReport.collectAsState()
+    val selectedDip by viewModel.selectedDip.collectAsState()
+    val dipSensitivity by viewModel.dipSensitivitySigma.collectAsState()
+    val isDipHighlightActive by viewModel.isDipHighlightActive.collectAsState()
     var showGeminiKeyDialog by remember { mutableStateOf(false) }
     var ticInput by remember { mutableStateOf("25155310") }
     val context = LocalContext.current
@@ -433,9 +447,18 @@ fun XilonDiscoveryScreen(
                         )
                     }
 
-                    // 3. Light Curve Canvas Visualization
+                    // 3. Light Curve Canvas Visualization with Transit Dip Scanner
                     item {
-                        LightCurveVisualizerCard(res)
+                        LightCurveVisualizerCard(
+                            res = res,
+                            dipReport = dipReport,
+                            selectedDip = selectedDip,
+                            isDipHighlightActive = isDipHighlightActive,
+                            dipSensitivity = dipSensitivity,
+                            onSelectDip = { viewModel.selectDip(it) },
+                            onToggleHighlight = { viewModel.toggleDipHighlight() },
+                            onRescanDips = { viewModel.runDipScan(it) }
+                        )
                     }
 
                     // 4. Astrophysical Derived Metrics Grid
@@ -895,7 +918,16 @@ enum class ChartEngine(val label: String, val icon: String) {
 }
 
 @Composable
-fun LightCurveVisualizerCard(res: XilonDetectionResult) {
+fun LightCurveVisualizerCard(
+    res: XilonDetectionResult,
+    dipReport: TransitDipScanReport? = null,
+    selectedDip: DetectedDipSignal? = null,
+    isDipHighlightActive: Boolean = true,
+    dipSensitivity: Double = 3.5,
+    onSelectDip: (DetectedDipSignal?) -> Unit = {},
+    onToggleHighlight: () -> Unit = {},
+    onRescanDips: (Double) -> Unit = {}
+) {
     var chartEngine by remember { mutableStateOf(ChartEngine.RECHARTS) }
     var binMode by remember { mutableStateOf(BinningMode.RAW) }
 
@@ -951,9 +983,10 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
             Spacer(modifier = Modifier.height(10.dp))
 
             if (chartEngine == ChartEngine.RECHARTS) {
-                // Interactive Recharts Engine
+                // Interactive Recharts Engine with highlighted dip regions
                 XilonDetectionRechartsView(
                     res = res,
+                    dipReport = dipReport,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
@@ -984,7 +1017,7 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Custom Canvas Chart
+                // Custom Canvas Chart with Highlighted Transit Dips
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1011,6 +1044,8 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
                             }
 
                             val baselineY = h * 0.28f
+
+                            // Draw baseline and mid-transit line
                             drawLine(
                                 color = Color.Gray.copy(alpha = 0.35f),
                                 start = Offset(0f, baselineY),
@@ -1024,6 +1059,39 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
                                 end = Offset(midX, h),
                                 strokeWidth = 1f
                             )
+
+                            // Draw highlighted dip regions if dip highlight is active
+                            if (isDipHighlightActive && dipReport != null) {
+                                dipReport.allDips.forEach { dip ->
+                                    val xStart = (((dip.ingressPhase - minP) / pRange) * w).toFloat().coerceIn(0f, w)
+                                    val xEnd = (((dip.egressPhase - minP) / pRange) * w).toFloat().coerceIn(0f, w)
+                                    val bandWidth = (xEnd - xStart).coerceAtLeast(6f)
+                                    val isSelected = selectedDip == dip
+                                    val bandColor = if (isSelected) Color(0xFF00E5FF).copy(alpha = 0.32f) else Color(0xFFFFD600).copy(alpha = 0.16f)
+                                    val borderColor = if (isSelected) Color(0xFF00E5FF) else Color(0xFFFFD600).copy(alpha = 0.65f)
+
+                                    // Shaded transit column
+                                    drawRect(
+                                        color = bandColor,
+                                        topLeft = Offset(xStart, 0f),
+                                        size = Size(bandWidth, h)
+                                    )
+                                    // Ingress line
+                                    drawLine(
+                                        color = borderColor,
+                                        start = Offset(xStart, 0f),
+                                        end = Offset(xStart, h),
+                                        strokeWidth = 1.5f
+                                    )
+                                    // Egress line
+                                    drawLine(
+                                        color = borderColor,
+                                        start = Offset(xEnd, 0f),
+                                        end = Offset(xEnd, h),
+                                        strokeWidth = 1.5f
+                                    )
+                                }
+                            }
 
                             // Draw background raw faint points if binned
                             if (binMode != BinningMode.RAW) {
@@ -1048,8 +1116,13 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
                                 } else 0f
                                 val y = (baselineY + depthPx).coerceIn(0f, h)
 
-                                val pointRadius = if (binMode == BinningMode.RAW) 2.5f else 4.0f
-                                val pointColor = if (binMode == BinningMode.RAW) AccentCyan.copy(alpha = 0.55f) else AccentCyan
+                                val inHighlightedDip = isDipHighlightActive && dipReport?.allDips?.any { dp -> pt.phase in dp.ingressPhase..dp.egressPhase } == true
+                                val pointRadius = if (inHighlightedDip) 4.5f else if (binMode == BinningMode.RAW) 2.5f else 4.0f
+                                val pointColor = when {
+                                    inHighlightedDip -> Color(0xFFFFD600)
+                                    binMode == BinningMode.RAW -> AccentCyan.copy(alpha = 0.55f)
+                                    else -> AccentCyan
+                                }
 
                                 drawCircle(
                                     color = pointColor,
@@ -1103,6 +1176,282 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
                         Text("-0.5 φ (Out-of-Transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
                         Text("Phase 0.0 (Mid-Transit)", color = AccentCyan, style = MaterialTheme.typography.labelSmall)
                         Text("+0.5 φ (Occultation)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            // -------------------------------------------------------------
+            // ANALYSIS UTILITY: TRANSIT DIP SCANNER & RECURRENCE VERIFICATION
+            // -------------------------------------------------------------
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Surface(
+                color = Color(0xFF090E17),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, if ((dipReport?.totalDipsFound ?: 0) > 0) AccentCyan.copy(alpha = 0.4f) else Color(0xFF1E293B)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    // Header Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Insights, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "ANALIZOR SCĂDERI DE LUMINĂ (DIP SCANNER)",
+                                color = AccentCyan,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        // Toggle highlight button
+                        Surface(
+                            onClick = onToggleHighlight,
+                            color = if (isDipHighlightActive) AccentCyan.copy(alpha = 0.2f) else Color(0xFF1E293B),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, if (isDipHighlightActive) AccentCyan else Color.Transparent)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    if (isDipHighlightActive) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = if (isDipHighlightActive) AccentCyan else TextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    if (isDipHighlightActive) "EVIDENȚIERE: ACTIVĂ" else "EVIDENȚIERE: OPRITĂ",
+                                    color = if (isDipHighlightActive) AccentCyan else TextSecondary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (dipReport != null) {
+                        // Diagnostic Verdict Pill
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = Color(dipReport.recurrenceVerdict.badgeColorHex).copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, Color(dipReport.recurrenceVerdict.badgeColorHex))
+                            ) {
+                                Text(
+                                    dipReport.recurrenceVerdict.title,
+                                    color = Color(dipReport.recurrenceVerdict.badgeColorHex),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            dipReport.scientificDiagnosis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextPrimary,
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Quick Metric Strip
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                color = Color(0xFF111827),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("SCĂDERI DETECTATE", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("${dipReport.totalDipsFound}", color = Color(0xFFFFD600), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFF111827),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("ZGOMOT FOTOMETRIC", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("${dipReport.noiseFloorPpm.toInt()} ppm", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFF111827),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("PRAG DETECȚIE", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("${String.format(Locale.US, "%.1f", dipReport.detectionThresholdSigma)}σ", color = AccentCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFF111827),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("RAPORT ODD/EVEN", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(dipReport.oddEvenDepthRatio?.let { String.format(Locale.US, "%.2f", it) } ?: "--", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        // Sensitivity Threshold Adjuster
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Sensibilitate scanare prag:", color = TextSecondary, fontSize = 10.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf(2.5 to "2.5σ (Sensibil)", 3.5 to "3.5σ (Standard)", 5.0 to "5.0σ (Strict)").forEach { (sigmaVal, label) ->
+                                    val isSelected = abs(dipSensitivity - sigmaVal) < 0.2
+                                    Surface(
+                                        onClick = { onRescanDips(sigmaVal) },
+                                        color = if (isSelected) AccentCyan.copy(alpha = 0.25f) else Color(0xFF1F2937),
+                                        shape = RoundedCornerShape(4.dp),
+                                        border = BorderStroke(1.dp, if (isSelected) AccentCyan else Color.Transparent)
+                                    ) {
+                                        Text(
+                                            label,
+                                            color = if (isSelected) AccentCyan else TextSecondary,
+                                            fontSize = 9.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // List of Detected Dips
+                        if (dipReport.allDips.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                "Scăderi identificate în timp / fază (Apasă pe card pentru a focaliza):",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(dipReport.allDips) { dip ->
+                                    val isSelected = selectedDip == dip
+                                    Surface(
+                                        onClick = { onSelectDip(dip) },
+                                        color = if (isSelected) Color(0xFF1E293B) else Color(0xFF111827),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(
+                                            if (isSelected) 1.5.dp else 1.dp,
+                                            if (isSelected) AccentCyan else if (dip.isPrimaryTransit) AccentGreen.copy(alpha = 0.5f) else Color(0xFF374151)
+                                        ),
+                                        modifier = Modifier.width(200.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "Dip #${dip.dipIndex}",
+                                                    color = if (isSelected) AccentCyan else Color.White,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Surface(
+                                                    color = Color(dip.shapeClassification.colorHex).copy(alpha = 0.2f),
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        dip.shapeClassification.label,
+                                                        color = Color(dip.shapeClassification.colorHex),
+                                                        fontSize = 8.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Text(
+                                                dip.label,
+                                                color = TextSecondary,
+                                                fontSize = 9.5.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column {
+                                                    Text("ADÂNCIME", color = TextSecondary, fontSize = 7.5.sp)
+                                                    Text("${dip.depthPpm.toInt()} ppm", color = Color(0xFFFFD600), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Text("${String.format(Locale.US, "%.4f", dip.depthMagnitudeDelta)} mag", color = TextSecondary, fontSize = 8.sp)
+                                                }
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text("DURATĂ / SNR", color = TextSecondary, fontSize = 7.5.sp)
+                                                    Text("${String.format(Locale.US, "%.1f", dip.durationHours)}h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Text("SNR: ${String.format(Locale.US, "%.1f", dip.snrSigma)}σ", color = AccentCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Scan trigger button if no report yet
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Scanează automat curba fotometrică pentru scăderi repetitive de magnitudine:",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { onRescanDips(dipSensitivity) },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("SCANEAZĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

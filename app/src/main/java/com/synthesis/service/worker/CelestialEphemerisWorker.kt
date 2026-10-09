@@ -14,6 +14,7 @@ import com.synthesis.domain.model.Observation
 import com.synthesis.domain.model.ObservationType
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -95,6 +96,12 @@ class CelestialEphemerisWorker @AssistedInject constructor(
 
             Log.d(TAG, "Celestial ephemeris sync completed successfully at GMST: ${String.format(Locale.US, "%.2fh", gmstHours)}")
             Result.success()
+        } catch (e: CancellationException) {
+            Log.d(TAG, "Celestial ephemeris sync worker cancelled by WorkManager.")
+            prefs.edit()
+                .putString(KEY_LAST_SYNC_STATUS, "STANDBY (Anulat/Oprit)")
+                .apply()
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Celestial sync worker failed: ${e.message}", e)
             prefs.edit()

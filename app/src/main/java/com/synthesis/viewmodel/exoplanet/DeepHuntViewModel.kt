@@ -1,9 +1,11 @@
 package com.synthesis.viewmodel.exoplanet
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.synthesis.data.repository.exoplanet.UnvettedHuntRepository
 import com.synthesis.domain.model.exoplanet.*
+import com.synthesis.service.worker.TessSurveyWorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +15,7 @@ import javax.inject.Inject
 
 enum class DeepHuntTab(val title: String) {
     MONO_TRANSITS("Mono-Transits (27d Blindspot)"),
+    TESS_SURVEY_SCOUT("TESS Survey Scout (WorkManager)"),
     TTV_INVERSION("TTV Gravitational Inversion"),
     ATMOSPHERIC_TSM("JWST Atmospheric TSM"),
     NEGLECTED_JEWELS("NASA Backlog Purgatory")
@@ -21,7 +24,8 @@ enum class DeepHuntTab(val title: String) {
 @HiltViewModel
 class DeepHuntViewModel @Inject constructor(
     private val repository: UnvettedHuntRepository,
-    private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository
+    private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository,
+    private val tessSurveyWorkManager: TessSurveyWorkManager
 ) : ViewModel() {
 
     private val _selectedTab = MutableStateFlow(DeepHuntTab.MONO_TRANSITS)
@@ -38,6 +42,13 @@ class DeepHuntViewModel @Inject constructor(
 
     private val _neglectedJewels = MutableStateFlow<List<NeglectedJewelTarget>>(emptyList())
     val neglectedJewels: StateFlow<List<NeglectedJewelTarget>> = _neglectedJewels.asStateFlow()
+
+    // WorkManager TESS Survey Scout State
+    private val _scoutStatus = MutableStateFlow<TessSurveyScoutStatus?>(null)
+    val scoutStatus: StateFlow<TessSurveyScoutStatus?> = _scoutStatus.asStateFlow()
+
+    private val _surveyCriteria = MutableStateFlow<TessSurveyCriteria>(TessSurveyCriteria())
+    val surveyCriteria: StateFlow<TessSurveyCriteria> = _surveyCriteria.asStateFlow()
 
     // Interactive custom single-transit inversion solver state
     private val _customCandidate = MutableStateFlow<MonoTransitCandidate?>(null)
@@ -56,6 +67,31 @@ class DeepHuntViewModel @Inject constructor(
         _ttvSystems.value = repository.getCuratedTtvSystems()
         _atmosphericScores.value = repository.getTopAtmosphericTsmScores()
         _neglectedJewels.value = repository.getNeglectedJewels()
+    }
+
+    fun loadScoutStatus(context: Context) {
+        _scoutStatus.value = tessSurveyWorkManager.getScoutStatus(context)
+        _surveyCriteria.value = tessSurveyWorkManager.loadCriteria(context)
+    }
+
+    fun triggerImmediateSurvey(context: Context) {
+        tessSurveyWorkManager.triggerImmediateSurvey(context, _surveyCriteria.value)
+        loadScoutStatus(context)
+    }
+
+    fun updateSurveyCriteria(context: Context, criteria: TessSurveyCriteria) {
+        _surveyCriteria.value = criteria
+        tessSurveyWorkManager.saveCriteria(context, criteria)
+        loadScoutStatus(context)
+    }
+
+    fun togglePeriodicScout(context: Context, enabled: Boolean) {
+        if (enabled) {
+            tessSurveyWorkManager.schedulePeriodicSurvey(context, repeatHours = 6, criteria = _surveyCriteria.value)
+        } else {
+            tessSurveyWorkManager.cancelPeriodicSurvey(context)
+        }
+        loadScoutStatus(context)
     }
 
     fun solveCustomSingleTransit(

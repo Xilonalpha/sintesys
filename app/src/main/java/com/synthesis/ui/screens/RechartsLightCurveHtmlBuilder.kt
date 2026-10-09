@@ -31,7 +31,8 @@ object RechartsLightCurveHtmlBuilder {
      * Builds interactive Recharts visualization directly from XilonDetectionResult (MAST/TESS photon time-series)
      */
     fun buildHtmlFromXilonDetection(
-        res: com.synthesis.domain.model.xilon.XilonDetectionResult
+        res: com.synthesis.domain.model.xilon.XilonDetectionResult,
+        dipReport: com.synthesis.domain.model.exoplanet.TransitDipScanReport? = null
     ): String {
         val targetName = "TIC ${res.star.ticId} • ${res.archivalCrossMatch.canonicalName}"
         val periodVal = String.format(java.util.Locale.US, "%.3f", res.orbitalPeriodDays)
@@ -41,6 +42,17 @@ object RechartsLightCurveHtmlBuilder {
         val durationVal = String.format(java.util.Locale.US, "%.2f", res.transitDurationHours)
         val classification = res.verdictTitle
         val isConfirmed = res.archivalCrossMatch.status == com.synthesis.domain.model.xilon.ArchivalCatalogStatus.CONFIRMED_PLANET_VALIDATION
+
+        // Detected dips JSON
+        val dipsJson = dipReport?.allDips?.joinToString(prefix = "[", postfix = "]") { dip ->
+            val x1 = Math.round(dip.ingressPhase * 1000.0) / 1000.0
+            val x2 = Math.round(dip.egressPhase * 1000.0) / 1000.0
+            val depth = Math.round(dip.depthPpm).toInt()
+            val snr = Math.round(dip.snrSigma * 10.0) / 10.0
+            val dur = Math.round(dip.durationHours * 10.0) / 10.0
+            val lbl = dip.label
+            """{"x1":$x1,"x2":$x2,"depth":$depth,"snr":$snr,"duration":$dur,"label":"$lbl","isPrimary":${dip.isPrimaryTransit}}"""
+        } ?: "[]"
 
         // Raw points to JSON
         val rawPts = res.lightCurveSample
@@ -129,17 +141,22 @@ object RechartsLightCurveHtmlBuilder {
   <div id="root"></div>
   <script>
     const { useState } = React;
-    const { ResponsiveContainer, ComposedChart, Scatter, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Brush } = window.Recharts;
+    const { ResponsiveContainer, ComposedChart, Scatter, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ReferenceArea } = window.Recharts;
     const rawData = $phaseFoldedJson;
     const binnedData = $binnedJson;
+    const detectedDips = $dipsJson;
 
     function CustomTooltip({ active, payload }) {
       if (active && payload && payload.length) {
         const d = payload[0].payload;
+        const matchedDip = detectedDips.find(dp => d.phase >= dp.x1 && d.phase <= dp.x2);
         return React.createElement("div", { className: "custom-tooltip" },
           React.createElement("div", { style: { color: "#94A3B8" } }, "Fază: " + d.phase),
           React.createElement("div", { style: { color: "#00E5FF", fontWeight: "bold" } }, "Flux Normalizat: " + d.flux),
-          d.isInTransit && React.createElement("div", { style: { color: "#00E676", fontWeight: "bold" } }, "★ ÎN TRANZIT (INGRESS-EGRESS)")
+          d.isInTransit && React.createElement("div", { style: { color: "#00E676", fontWeight: "bold" } }, "★ ÎN TRANZIT (INGRESS-EGRESS)"),
+          matchedDip && React.createElement("div", { style: { color: "#FFD600", fontWeight: "bold", marginTop: "2px" } }, 
+            "🔍 " + matchedDip.label + " (" + matchedDip.depth + " ppm, SNR " + matchedDip.snr + "σ)"
+          )
         );
       }
       return null;
@@ -147,6 +164,7 @@ object RechartsLightCurveHtmlBuilder {
 
     function XilonRecharts() {
       const [view, setView] = useState("all"); // 'all' (raw+binned), 'binned' (curat), 'raw'
+      const [highlightDips, setHighlightDips] = useState(true);
 
       return React.createElement("div", null,
         React.createElement("div", { className: "header" },
@@ -175,19 +193,36 @@ object RechartsLightCurveHtmlBuilder {
           )
         ),
         React.createElement("div", { className: "tab-bar" },
-          React.createElement("div", { className: "tab-btn " + (view === "all" ? "active" : ""), onClick: () => setView("all") }, "🌐 Foton Raw + Binned + Model"),
-          React.createElement("div", { className: "tab-btn " + (view === "binned" ? "active" : ""), onClick: () => setView("binned") }, "📊 Binned Mediat (SNR Mare)"),
-          React.createElement("div", { className: "tab-btn " + (view === "raw" ? "active" : ""), onClick: () => setView("raw") }, "✨ Doar Fotometrie Brută")
+          React.createElement("div", { className: "tab-btn " + (view === "all" ? "active" : ""), onClick: () => setView("all") }, "🌐 Foton Raw + Binned"),
+          React.createElement("div", { className: "tab-btn " + (view === "binned" ? "active" : ""), onClick: () => setView("binned") }, "📊 Binned Mediat"),
+          detectedDips.length > 0 && React.createElement("div", { 
+            className: "tab-btn " + (highlightDips ? "active" : ""), 
+            style: { color: highlightDips ? "#00E676" : "#94A3B8" },
+            onClick: () => setHighlightDips(!highlightDips) 
+          }, (highlightDips ? "✓ " : "") + "🔍 Subliniază Scăderi (" + detectedDips.length + ")")
         ),
         React.createElement("div", { className: "chart-box" },
           React.createElement(ResponsiveContainer, { width: "100%", height: 210 },
-            React.createElement(ComposedChart, { margin: { top: 10, right: 10, left: -20, bottom: 5 } },
+            React.createElement(ComposedChart, { margin: { top: 15, right: 10, left: -20, bottom: 5 } },
               React.createElement(CartesianGrid, { stroke: "#1E293B", strokeDasharray: "2 2" }),
               React.createElement(XAxis, { dataKey: "phase", type: "number", domain: ["auto", "auto"], stroke: "#64748B", fontSize: 10, unit: "φ" }),
               React.createElement(YAxis, { dataKey: "flux", domain: ["auto", "auto"], stroke: "#64748B", fontSize: 10 }),
               React.createElement(Tooltip, { content: React.createElement(CustomTooltip) }),
               React.createElement(ReferenceLine, { x: 0, stroke: "#00E5FF", strokeDasharray: "3 3" }),
               React.createElement(ReferenceLine, { y: 1.0, stroke: "#64748B", strokeDasharray: "2 2" }),
+              highlightDips && detectedDips.map((dp, i) => 
+                React.createElement(ReferenceArea, {
+                  key: "dip-" + i,
+                  x1: dp.x1,
+                  x2: dp.x2,
+                  fill: dp.isPrimary ? "#00E5FF" : "#FFD600",
+                  fillOpacity: 0.18,
+                  stroke: dp.isPrimary ? "#00E5FF" : "#FFD600",
+                  strokeDasharray: "2 2",
+                  strokeWidth: 1.5,
+                  label: { value: "Dip #" + (i + 1) + " (" + dp.depth + " ppm)", fill: dp.isPrimary ? "#00E5FF" : "#FFD600", fontSize: 9, position: "top" }
+                })
+              ),
               (view === "all" || view === "raw") && React.createElement(Scatter, {
                 data: rawData,
                 dataKey: "flux",

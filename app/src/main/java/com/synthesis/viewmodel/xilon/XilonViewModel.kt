@@ -6,6 +6,9 @@ import com.synthesis.data.local.entity.XilonDiscoveryEntity
 import com.synthesis.data.repository.xilon.XilonRepository
 import com.synthesis.data.service.gemini.GeminiAnalysisResult
 import com.synthesis.data.service.gemini.GeminiAstrophysicsService
+import com.synthesis.domain.model.exoplanet.DetectedDipSignal
+import com.synthesis.domain.model.exoplanet.TransitDipScanReport
+import com.synthesis.engine.exoplanet.TransitDipScannerUtility
 import com.synthesis.domain.model.xilon.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -52,7 +55,8 @@ sealed interface XilonUiState {
 class XilonViewModel @Inject constructor(
     private val xilonRepository: XilonRepository,
     val geminiService: GeminiAstrophysicsService,
-    private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository
+    private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository,
+    private val transitDipScannerUtility: TransitDipScannerUtility
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<XilonUiState>(
@@ -67,6 +71,19 @@ class XilonViewModel @Inject constructor(
     )
 
     val curatedTargets: List<TargetStarCandidate> = xilonRepository.getCuratedTargets()
+
+    // Transit Dip Scanner State
+    private val _dipScanReport = MutableStateFlow<TransitDipScanReport?>(null)
+    val dipScanReport: StateFlow<TransitDipScanReport?> = _dipScanReport.asStateFlow()
+
+    private val _selectedDip = MutableStateFlow<DetectedDipSignal?>(null)
+    val selectedDip: StateFlow<DetectedDipSignal?> = _selectedDip.asStateFlow()
+
+    private val _dipSensitivitySigma = MutableStateFlow<Double>(3.5)
+    val dipSensitivitySigma: StateFlow<Double> = _dipSensitivitySigma.asStateFlow()
+
+    private val _isDipHighlightActive = MutableStateFlow<Boolean>(true)
+    val isDipHighlightActive: StateFlow<Boolean> = _isDipHighlightActive.asStateFlow()
 
     // Real Gemini AI State
     private val _geminiAnalysis = MutableStateFlow<GeminiAnalysisResult?>(null)
@@ -222,6 +239,9 @@ class XilonViewModel @Inject constructor(
                         result = detection,
                         curatedTargets = curatedTargets
                     )
+                    // Automatically run recurring dip scanner utility
+                    runDipScanInternal(detection, _dipSensitivitySigma.value)
+
                     // Trigger real Gemini analysis automatically!
                     runGeminiAnalysis(detection)
                 },
@@ -233,6 +253,45 @@ class XilonViewModel @Inject constructor(
                 }
             )
         }
+    }
+
+    /**
+     * Executes the transit dip scanner utility on current light curve data
+     */
+    fun runDipScan(sigmaThreshold: Double = _dipSensitivitySigma.value) {
+        val current = _uiState.value
+        if (current is XilonUiState.Success) {
+            _dipSensitivitySigma.value = sigmaThreshold
+            runDipScanInternal(current.result, sigmaThreshold)
+        }
+    }
+
+    private fun runDipScanInternal(detection: XilonDetectionResult, sigma: Double) {
+        viewModelScope.launch {
+            val report = transitDipScannerUtility.scanForRecurringDips(
+                ticId = detection.star.ticId,
+                points = detection.lightCurveSample,
+                nominalPeriodDays = detection.orbitalPeriodDays,
+                expectedDurationHours = detection.transitDurationHours,
+                sigmaThreshold = sigma
+            )
+            _dipScanReport.value = report
+            _selectedDip.value = report.primaryDip
+            _isDipHighlightActive.value = true
+        }
+    }
+
+    fun selectDip(dip: DetectedDipSignal?) {
+        _selectedDip.value = if (_selectedDip.value == dip) null else dip
+    }
+
+    fun toggleDipHighlight() {
+        _isDipHighlightActive.value = !_isDipHighlightActive.value
+    }
+
+    fun setDipSensitivity(sigma: Double) {
+        _dipSensitivitySigma.value = sigma
+        runDipScan(sigma)
     }
 
     fun resetToIdle() {
