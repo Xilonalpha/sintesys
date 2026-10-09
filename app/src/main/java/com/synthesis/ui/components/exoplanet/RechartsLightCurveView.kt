@@ -116,3 +116,59 @@ fun RechartsLightCurveSampleView(
         modifier = modifier
     )
 }
+
+/**
+ * Interactive Recharts chart specifically for Xilon Detection Result imported via TIC ID
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun XilonDetectionRechartsView(
+    res: com.synthesis.domain.model.xilon.XilonDetectionResult,
+    modifier: Modifier = Modifier
+) {
+    val htmlContent = remember(res) {
+        RechartsLightCurveHtmlBuilder.buildHtmlFromXilonDetection(res)
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(350.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, DarkBorder)
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxWidth().height(350.dp),
+            factory = { context ->
+                WebView(context).apply {
+                    setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    setBackgroundColor(0xFF070B14.toInt())
+                    webViewClient = WebViewClient()
+                    loadDataWithBaseURL(
+                        "https://xilon.recharts.astro/",
+                        htmlContent,
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                }
+            },
+            update = { webView ->
+                webView.loadDataWithBaseURL(
+                    "https://xilon.recharts.astro/",
+                    htmlContent,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        )
+    }
+}
+

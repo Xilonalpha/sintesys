@@ -27,6 +27,196 @@ object RechartsLightCurveHtmlBuilder {
         return buildHtml(points, periodicResult, targetName)
     }
 
+    /**
+     * Builds interactive Recharts visualization directly from XilonDetectionResult (MAST/TESS photon time-series)
+     */
+    fun buildHtmlFromXilonDetection(
+        res: com.synthesis.domain.model.xilon.XilonDetectionResult
+    ): String {
+        val targetName = "TIC ${res.star.ticId} • ${res.archivalCrossMatch.canonicalName}"
+        val periodVal = String.format(java.util.Locale.US, "%.3f", res.orbitalPeriodDays)
+        val depthVal = String.format(java.util.Locale.US, "%.0f", res.transitDepthPpm)
+        val snrVal = String.format(java.util.Locale.US, "%.1f", res.signalToNoiseRatio)
+        val radiusVal = res.derivedPlanetRadiusEarth?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "--"
+        val durationVal = String.format(java.util.Locale.US, "%.2f", res.transitDurationHours)
+        val classification = res.verdictTitle
+        val isConfirmed = res.archivalCrossMatch.status == com.synthesis.domain.model.xilon.ArchivalCatalogStatus.CONFIRMED_PLANET_VALIDATION
+
+        // Raw points to JSON
+        val rawPts = res.lightCurveSample
+        val phaseFoldedJson = rawPts.joinToString(prefix = "[", postfix = "]") { pt ->
+            val ph = Math.round(pt.phase * 1000.0) / 1000.0
+            val fl = Math.round(pt.detrendedFlux * 10000.0) / 10000.0
+            val mod = pt.modelFlux?.let { Math.round(it * 10000.0) / 10000.0 } ?: "null"
+            val inTransit = Math.abs(pt.phase) < (res.transitDurationHours / (res.orbitalPeriodDays * 24.0 * 2.0))
+            """{"phase":$ph,"flux":$fl,"modelFlux":$mod,"isInTransit":$inTransit}"""
+        }
+
+        // Binned points
+        val minP = rawPts.minOfOrNull { it.phase } ?: -0.5
+        val maxP = rawPts.maxOfOrNull { it.phase } ?: 0.5
+        val pRange = (maxP - minP).takeIf { it > 0.001 } ?: 1.0
+        val binWidth = (pRange / 35.0).coerceAtLeast(0.01)
+
+        val binnedMap = rawPts.groupBy { Math.floor((it.phase - minP) / binWidth) }
+        val binnedJson = binnedMap.mapNotNull { (_, pts) ->
+            if (pts.isEmpty()) null
+            else {
+                val meanPh = Math.round((pts.map { it.phase }.average()) * 1000.0) / 1000.0
+                val meanFl = Math.round((pts.map { it.detrendedFlux }.average()) * 10000.0) / 10000.0
+                """{"phase":$meanPh,"flux":$meanFl}"""
+            }
+        }.sortedBy { it }.joinToString(prefix = "[", postfix = "]")
+
+        return """
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TIC Light Curve Recharts</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #070B14;
+      color: #E2E8F0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 10px;
+      overflow-x: hidden;
+      user-select: none;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #1E293B;
+    }
+    .main-title { font-size: 13px; font-weight: 700; color: #00E5FF; }
+    .sub-title { font-size: 10px; color: #94A3B8; }
+    .status-pill {
+      font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;
+      background: rgba(0, 229, 255, 0.15); color: #00E5FF; border: 1px solid #00E5FF;
+    }
+    .metrics-bar {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px;
+    }
+    .metric-card {
+      background: #0F172A; border: 1px solid #1E293B; border-radius: 6px; padding: 5px 6px; text-align: center;
+    }
+    .metric-label { font-size: 8.5px; color: #64748B; text-transform: uppercase; font-weight: 600; }
+    .metric-val { font-size: 11px; font-weight: 700; color: #F8FAFC; font-family: monospace; margin-top: 1px; }
+    .tab-bar { display: flex; gap: 6px; margin-bottom: 8px; }
+    .tab-btn {
+      flex: 1; background: #0F172A; border: 1px solid #1E293B; color: #94A3B8; font-size: 10px; font-weight: 600;
+      padding: 5px 0; border-radius: 6px; cursor: pointer; text-align: center;
+    }
+    .tab-btn.active { background: rgba(0, 229, 255, 0.15); border-color: #00E5FF; color: #00E5FF; }
+    .chart-box {
+      background: #0B1120; border: 1px solid #1E293B; border-radius: 8px; padding: 6px 4px; position: relative;
+    }
+    .custom-tooltip {
+      background: #0F172A; border: 1px solid #00E5FF; border-radius: 6px; padding: 5px 8px; font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const { useState } = React;
+    const { ResponsiveContainer, ComposedChart, Scatter, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Brush } = window.Recharts;
+    const rawData = $phaseFoldedJson;
+    const binnedData = $binnedJson;
+
+    function CustomTooltip({ active, payload }) {
+      if (active && payload && payload.length) {
+        const d = payload[0].payload;
+        return React.createElement("div", { className: "custom-tooltip" },
+          React.createElement("div", { style: { color: "#94A3B8" } }, "Fază: " + d.phase),
+          React.createElement("div", { style: { color: "#00E5FF", fontWeight: "bold" } }, "Flux Normalizat: " + d.flux),
+          d.isInTransit && React.createElement("div", { style: { color: "#00E676", fontWeight: "bold" } }, "★ ÎN TRANZIT (INGRESS-EGRESS)")
+        );
+      }
+      return null;
+    }
+
+    function XilonRecharts() {
+      const [view, setView] = useState("all"); // 'all' (raw+binned), 'binned' (curat), 'raw'
+
+      return React.createElement("div", null,
+        React.createElement("div", { className: "header" },
+          React.createElement("div", null,
+            React.createElement("div", { className: "main-title" }, "RECHARTS: FOTOMETRIE TESS MAST"),
+            React.createElement("div", { className: "sub-title" }, "$targetName")
+          ),
+          React.createElement("span", { className: "status-pill" }, "${if (isConfirmed) "CONFIRMED BENCHMARK" else "RECOVERY CANDIDATE"}")
+        ),
+        React.createElement("div", { className: "metrics-bar" },
+          React.createElement("div", { className: "metric-card" },
+            React.createElement("div", { className: "metric-label" }, "Perioadă"),
+            React.createElement("div", { className: "metric-val", style: { color: "#00E676" } }, "$periodVal d")
+          ),
+          React.createElement("div", { className: "metric-card" },
+            React.createElement("div", { className: "metric-label" }, "Adâncime"),
+            React.createElement("div", { className: "metric-val", style: { color: "#00E5FF" } }, "$depthVal ppm")
+          ),
+          React.createElement("div", { className: "metric-card" },
+            React.createElement("div", { className: "metric-label" }, "Rază Planetă"),
+            React.createElement("div", { className: "metric-val", style: { color: "#FFB300" } }, "$radiusVal R⊕")
+          ),
+          React.createElement("div", { className: "metric-card" },
+            React.createElement("div", { className: "metric-label" }, "SNR Detecție"),
+            React.createElement("div", { className: "metric-val", style: { color: "#38BDF8" } }, "$snrVal σ")
+          )
+        ),
+        React.createElement("div", { className: "tab-bar" },
+          React.createElement("div", { className: "tab-btn " + (view === "all" ? "active" : ""), onClick: () => setView("all") }, "🌐 Foton Raw + Binned + Model"),
+          React.createElement("div", { className: "tab-btn " + (view === "binned" ? "active" : ""), onClick: () => setView("binned") }, "📊 Binned Mediat (SNR Mare)"),
+          React.createElement("div", { className: "tab-btn " + (view === "raw" ? "active" : ""), onClick: () => setView("raw") }, "✨ Doar Fotometrie Brută")
+        ),
+        React.createElement("div", { className: "chart-box" },
+          React.createElement(ResponsiveContainer, { width: "100%", height: 210 },
+            React.createElement(ComposedChart, { margin: { top: 10, right: 10, left: -20, bottom: 5 } },
+              React.createElement(CartesianGrid, { stroke: "#1E293B", strokeDasharray: "2 2" }),
+              React.createElement(XAxis, { dataKey: "phase", type: "number", domain: ["auto", "auto"], stroke: "#64748B", fontSize: 10, unit: "φ" }),
+              React.createElement(YAxis, { dataKey: "flux", domain: ["auto", "auto"], stroke: "#64748B", fontSize: 10 }),
+              React.createElement(Tooltip, { content: React.createElement(CustomTooltip) }),
+              React.createElement(ReferenceLine, { x: 0, stroke: "#00E5FF", strokeDasharray: "3 3" }),
+              React.createElement(ReferenceLine, { y: 1.0, stroke: "#64748B", strokeDasharray: "2 2" }),
+              (view === "all" || view === "raw") && React.createElement(Scatter, {
+                data: rawData,
+                dataKey: "flux",
+                fill: "#38BDF8",
+                opacity: 0.45,
+                shape: "circle",
+                isAnimationActive: false
+              }),
+              (view === "all" || view === "binned") && React.createElement(Line, {
+                data: binnedData,
+                type: "monotone",
+                dataKey: "flux",
+                stroke: "#FFB300",
+                strokeWidth: 2,
+                dot: { r: 3, fill: "#FFB300" },
+                isAnimationActive: false
+              })
+            )
+          )
+        )
+      );
+    }
+    ReactDOM.render(React.createElement(XilonRecharts), document.getElementById("root"));
+  </script>
+</body>
+</html>
+        """.trimIndent()
+    }
+
     fun buildHtml(
         dataPoints: List<PhotometricDataPoint>,
         periodicResult: PeriodicTransitDetectionResult?,

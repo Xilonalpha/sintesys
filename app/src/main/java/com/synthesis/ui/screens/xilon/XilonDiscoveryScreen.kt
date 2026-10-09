@@ -57,7 +57,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.ui.window.Dialog
+import com.synthesis.ui.components.exoplanet.XilonDetectionRechartsView
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -247,24 +249,122 @@ fun XilonDiscoveryScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("Curated benchmarks & candidates:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+                        
+                        // SCIENTIFIC ADVISOR: TARGET COUNSELING (WHICH ONES DESERVE VERIFICATION)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CuratedTargetChip("WASP-126 b (TIC 25155310)", "25155310", isSelected = ticInput == "25155310") {
-                                ticInput = "25155310"
-                                viewModel.runScan("25155310")
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "CONSILIER ASTRONOMIC: CE STELE MERITĂ VERIFICATE?",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                            CuratedTargetChip("WASP-119 b (TIC 388104525)", "388104525", isSelected = ticInput == "388104525") {
-                                ticInput = "388104525"
-                                viewModel.runScan("388104525")
-                            }
-                            CuratedTargetChip("TOI-1895 (TIC 384159646)", "384159646", isSelected = ticInput == "384159646") {
-                                ticInput = "384159646"
-                                viewModel.runScan("384159646")
+                            Text(
+                                "Prioritizare NASA & Blindspots",
+                                color = AccentCyan,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val curatedList = viewModel.curatedTargets
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            curatedList.forEach { target ->
+                                val isSelected = ticInput == target.ticId
+                                val isHighPriority = target.advisoryPriority.contains("PRIORITATE MAXIMĂ") || target.advisoryPriority.contains("CERCETARE ÎNALTĂ")
+                                val isControl = target.advisoryPriority.contains("CONTROL")
+                                
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            ticInput = target.ticId
+                                            viewModel.runScan(target.ticId)
+                                        },
+                                    color = if (isSelected) AccentCyan.copy(alpha = 0.15f) else Color(0xFF0F172A),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) AccentCyan
+                                        else if (isHighPriority) AccentAmber.copy(alpha = 0.6f)
+                                        else if (isControl) Color(0xFF334155)
+                                        else AccentGreen.copy(alpha = 0.4f)
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                Surface(
+                                                    color = if (isHighPriority) AccentAmber.copy(alpha = 0.2f)
+                                                           else if (isControl) Color(0xFF334155)
+                                                           else AccentGreen.copy(alpha = 0.2f),
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        target.advisoryPriority,
+                                                        color = if (isHighPriority) AccentAmber else if (isControl) TextSecondary else AccentGreen,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    target.name,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSelected) AccentCyan else Color.White
+                                                )
+                                            }
+                                            
+                                            Button(
+                                                onClick = {
+                                                    ticInput = target.ticId
+                                                    viewModel.runScan(target.ticId)
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = if (isSelected) AccentCyan else Color(0xFF1E293B),
+                                                    contentColor = if (isSelected) Color.Black else AccentCyan
+                                                ),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(28.dp)
+                                            ) {
+                                                Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            target.scientificReason,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isHighPriority) Color(0xFFFDE68A) else TextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                        
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            "Sector: ${target.sector} • Mag: ${target.estimatedMag} • Clasificare: ${target.knownClassification}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -789,8 +889,14 @@ enum class BinningMode(val label: String) {
     BIN_30M("30 min")
 }
 
+enum class ChartEngine(val label: String, val icon: String) {
+    RECHARTS("Recharts Interactiv", "🌐"),
+    NATIVE_CANVAS("Canvas Nativ", "⚡")
+}
+
 @Composable
 fun LightCurveVisualizerCard(res: XilonDetectionResult) {
+    var chartEngine by remember { mutableStateOf(ChartEngine.RECHARTS) }
     var binMode by remember { mutableStateOf(BinningMode.RAW) }
 
     Card(
@@ -804,159 +910,200 @@ fun LightCurveVisualizerCard(res: XilonDetectionResult) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("PHASE-FOLDED LIGHT CURVE", color = AccentCyan, style = MaterialTheme.typography.labelMedium)
-                Text("${res.totalPhotonsAnalyzed} Photons", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-            }
+                Column {
+                    Text("CURBĂ DE LUMINĂ (TIC ${res.star.ticId})", color = AccentCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("${res.totalPhotonsAnalyzed} fotoni analizați • Perioadă: ${String.format(Locale.US, "%.3f", res.orbitalPeriodDays)}d", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Binning Selector Chips
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Binning:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                BinningMode.values().forEach { mode ->
-                    val isSelected = binMode == mode
-                    Surface(
-                        onClick = { binMode = mode },
-                        color = if (isSelected) AccentCyan.copy(alpha = 0.25f) else DarkBackground,
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) AccentCyan else TextSecondary.copy(alpha = 0.25f))
-                    ) {
-                        Text(
-                            mode.label,
-                            color = if (isSelected) AccentCyan else TextSecondary,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
+                // Switch between Recharts and Native Canvas
+                Surface(
+                    color = Color(0xFF0F172A),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Color(0xFF334155))
+                ) {
+                    Row(modifier = Modifier.padding(2.dp)) {
+                        ChartEngine.values().forEach { engine ->
+                            val isSelected = chartEngine == engine
+                            Surface(
+                                onClick = { chartEngine = engine },
+                                color = if (isSelected) AccentCyan.copy(alpha = 0.25f) else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(engine.icon, fontSize = 11.sp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        engine.label,
+                                        color = if (isSelected) AccentCyan else TextSecondary,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Custom Canvas Chart
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .background(Color(0xFF070B12), RoundedCornerShape(8.dp))
-                    .padding(8.dp)
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val w = size.width
-                    val h = size.height
-
-                    val rawPts = res.lightCurveSample
-                    if (rawPts.isNotEmpty()) {
-                        val minP = rawPts.minOf { it.phase }
-                        val maxP = rawPts.maxOf { it.phase }
-                        val pRange = (maxP - minP).takeIf { it > 0.001 } ?: 1.0
-                        val midX = (((0.0 - minP) / pRange) * w).toFloat().coerceIn(0f, w)
-
-                        // Compute binned points if requested
-                        val displayPts = when (binMode) {
-                            BinningMode.RAW -> rawPts
-                            BinningMode.BIN_15M -> binPhotometry(rawPts, binWidth = (pRange / 35.0).coerceAtLeast(0.1))
-                            BinningMode.BIN_30M -> binPhotometry(rawPts, binWidth = (pRange / 18.0).coerceAtLeast(0.2))
+            if (chartEngine == ChartEngine.RECHARTS) {
+                // Interactive Recharts Engine
+                XilonDetectionRechartsView(
+                    res = res,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                // Native Compose Canvas Engine with Binning Controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Binning:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    BinningMode.values().forEach { mode ->
+                        val isSelected = binMode == mode
+                        Surface(
+                            onClick = { binMode = mode },
+                            color = if (isSelected) AccentCyan.copy(alpha = 0.25f) else DarkBackground,
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) AccentCyan else TextSecondary.copy(alpha = 0.25f))
+                        ) {
+                            Text(
+                                mode.label,
+                                color = if (isSelected) AccentCyan else TextSecondary,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
                         }
+                    }
+                }
 
-                        val baselineY = h * 0.28f
-                        drawLine(
-                            color = Color.Gray.copy(alpha = 0.35f),
-                            start = Offset(0f, baselineY),
-                            end = Offset(w, baselineY),
-                            strokeWidth = 1.5f
-                        )
+                Spacer(modifier = Modifier.height(10.dp))
 
-                        drawLine(
-                            color = AccentCyan.copy(alpha = 0.4f),
-                            start = Offset(midX, 0f),
-                            end = Offset(midX, h),
-                            strokeWidth = 1f
-                        )
+                // Custom Canvas Chart
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(Color(0xFF070B12), RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val w = size.width
+                        val h = size.height
 
-                        // Draw background raw faint points if binned
-                        if (binMode != BinningMode.RAW) {
-                            rawPts.forEach { pt ->
+                        val rawPts = res.lightCurveSample
+                        if (rawPts.isNotEmpty()) {
+                            val minP = rawPts.minOf { it.phase }
+                            val maxP = rawPts.maxOf { it.phase }
+                            val pRange = (maxP - minP).takeIf { it > 0.001 } ?: 1.0
+                            val midX = (((0.0 - minP) / pRange) * w).toFloat().coerceIn(0f, w)
+
+                            // Compute binned points if requested
+                            val displayPts = when (binMode) {
+                                BinningMode.RAW -> rawPts
+                                BinningMode.BIN_15M -> binPhotometry(rawPts, binWidth = (pRange / 35.0).coerceAtLeast(0.1))
+                                BinningMode.BIN_30M -> binPhotometry(rawPts, binWidth = (pRange / 18.0).coerceAtLeast(0.2))
+                            }
+
+                            val baselineY = h * 0.28f
+                            drawLine(
+                                color = Color.Gray.copy(alpha = 0.35f),
+                                start = Offset(0f, baselineY),
+                                end = Offset(w, baselineY),
+                                strokeWidth = 1.5f
+                            )
+
+                            drawLine(
+                                color = AccentCyan.copy(alpha = 0.4f),
+                                start = Offset(midX, 0f),
+                                end = Offset(midX, h),
+                                strokeWidth = 1f
+                            )
+
+                            // Draw background raw faint points if binned
+                            if (binMode != BinningMode.RAW) {
+                                rawPts.forEach { pt ->
+                                    val x = (((pt.phase - minP) / pRange) * w).toFloat().coerceIn(0f, w)
+                                    val depthPx = if (res.transitDepthPpm > 0) {
+                                        (pt.detrendedFlux * 1_000_000.0 / res.transitDepthPpm * (h * 0.5f)).toFloat()
+                                    } else 0f
+                                    val y = (baselineY + depthPx).coerceIn(0f, h)
+                                    drawCircle(
+                                        color = Color.Gray.copy(alpha = 0.25f),
+                                        radius = 1.5f,
+                                        center = Offset(x, y)
+                                    )
+                                }
+                            }
+
+                            displayPts.forEach { pt ->
                                 val x = (((pt.phase - minP) / pRange) * w).toFloat().coerceIn(0f, w)
                                 val depthPx = if (res.transitDepthPpm > 0) {
                                     (pt.detrendedFlux * 1_000_000.0 / res.transitDepthPpm * (h * 0.5f)).toFloat()
                                 } else 0f
                                 val y = (baselineY + depthPx).coerceIn(0f, h)
+
+                                val pointRadius = if (binMode == BinningMode.RAW) 2.5f else 4.0f
+                                val pointColor = if (binMode == BinningMode.RAW) AccentCyan.copy(alpha = 0.55f) else AccentCyan
+
                                 drawCircle(
-                                    color = Color.Gray.copy(alpha = 0.25f),
-                                    radius = 1.5f,
+                                    color = pointColor,
+                                    radius = pointRadius,
                                     center = Offset(x, y)
                                 )
                             }
-                        }
 
-                        displayPts.forEach { pt ->
-                            val x = (((pt.phase - minP) / pRange) * w).toFloat().coerceIn(0f, w)
-                            val depthPx = if (res.transitDepthPpm > 0) {
-                                (pt.detrendedFlux * 1_000_000.0 / res.transitDepthPpm * (h * 0.5f)).toFloat()
-                            } else 0f
+                            // Draw fitted U-shaped transit model curve
+                            val path = Path()
+                            val halfDurationWidthPx = if (res.transitDurationHours > 0) {
+                                ((res.transitDurationHours * 0.5 / pRange) * w).toFloat().coerceIn(w * 0.06f, w * 0.25f)
+                            } else w * 0.12f
+                            val bottomY = baselineY + (h * 0.5f)
 
-                            val y = (baselineY + depthPx).coerceIn(0f, h)
+                            path.moveTo(0f, baselineY)
+                            path.lineTo((midX - halfDurationWidthPx).coerceAtLeast(0f), baselineY)
+                            path.cubicTo(
+                                midX - halfDurationWidthPx * 0.8f, baselineY,
+                                midX - halfDurationWidthPx * 0.6f, bottomY,
+                                midX - halfDurationWidthPx * 0.3f, bottomY
+                            )
+                            path.lineTo(midX + halfDurationWidthPx * 0.3f, bottomY)
+                            path.cubicTo(
+                                midX + halfDurationWidthPx * 0.6f, bottomY,
+                                midX + halfDurationWidthPx * 0.8f, baselineY,
+                                (midX + halfDurationWidthPx).coerceAtMost(w), baselineY
+                            )
+                            path.lineTo(w, baselineY)
 
-                            val pointRadius = if (binMode == BinningMode.RAW) 2.5f else 4.0f
-                            val pointColor = if (binMode == BinningMode.RAW) AccentCyan.copy(alpha = 0.55f) else AccentCyan
-
-                            drawCircle(
-                                color = pointColor,
-                                radius = pointRadius,
-                                center = Offset(x, y)
+                            drawPath(
+                                path = path,
+                                color = AccentGreen,
+                                style = Stroke(width = 3f)
                             )
                         }
-
-                        // Draw fitted U-shaped transit model curve
-                        val path = Path()
-                        val halfDurationWidthPx = if (res.transitDurationHours > 0) {
-                            ((res.transitDurationHours * 0.5 / pRange) * w).toFloat().coerceIn(w * 0.06f, w * 0.25f)
-                        } else w * 0.12f
-                        val bottomY = baselineY + (h * 0.5f)
-
-                        path.moveTo(0f, baselineY)
-                        path.lineTo((midX - halfDurationWidthPx).coerceAtLeast(0f), baselineY)
-                        path.cubicTo(
-                            midX - halfDurationWidthPx * 0.8f, baselineY,
-                            midX - halfDurationWidthPx * 0.6f, bottomY,
-                            midX - halfDurationWidthPx * 0.3f, bottomY
-                        )
-                        path.lineTo(midX + halfDurationWidthPx * 0.3f, bottomY)
-                        path.cubicTo(
-                            midX + halfDurationWidthPx * 0.6f, bottomY,
-                            midX + halfDurationWidthPx * 0.8f, baselineY,
-                            (midX + halfDurationWidthPx).coerceAtMost(w), baselineY
-                        )
-                        path.lineTo(w, baselineY)
-
-                        drawPath(
-                            path = path,
-                            color = AccentGreen,
-                            style = Stroke(width = 3f)
-                        )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            val isHours = res.lightCurveSample.any { kotlin.math.abs(it.phase) > 1.0 }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                if (isHours && res.lightCurveSample.isNotEmpty()) {
-                    Text("${res.lightCurveSample.minOf { it.phase }.roundToInt()}h (Pre-transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                    Text("0.0h (Mid-Transit)", color = AccentCyan, style = MaterialTheme.typography.labelSmall)
-                    Text("+${res.lightCurveSample.maxOf { it.phase }.roundToInt()}h (Post-transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                } else {
-                    Text("-0.5 φ (Out-of-Transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                    Text("Phase 0.0 (Mid-Transit)", color = AccentCyan, style = MaterialTheme.typography.labelSmall)
-                    Text("+0.5 φ (Occultation)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                val isHours = res.lightCurveSample.any { kotlin.math.abs(it.phase) > 1.0 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (isHours && res.lightCurveSample.isNotEmpty()) {
+                        Text("${res.lightCurveSample.minOf { it.phase }.roundToInt()}h (Pre-transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        Text("0.0h (Mid-Transit)", color = AccentCyan, style = MaterialTheme.typography.labelSmall)
+                        Text("+${res.lightCurveSample.maxOf { it.phase }.roundToInt()}h (Post-transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    } else {
+                        Text("-0.5 φ (Out-of-Transit)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        Text("Phase 0.0 (Mid-Transit)", color = AccentCyan, style = MaterialTheme.typography.labelSmall)
+                        Text("+0.5 φ (Occultation)", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }

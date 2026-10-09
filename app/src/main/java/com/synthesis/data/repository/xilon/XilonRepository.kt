@@ -57,44 +57,76 @@ class XilonRepository @Inject constructor(
     fun getCuratedTargets(): List<TargetStarCandidate> {
         return listOf(
             TargetStarCandidate(
+                ticId = "384159646",
+                name = "TIC 384159646 (TOI-1895.01 Candidate)",
+                description = "Planetary Candidate neconfirmat de NASA (P=748.1 d). Mono-tranzit de perioadă foarte lungă, scăpare din algoritmul SPOC din cauza blindspot-ului de sector.",
+                sector = "s0039-s0039",
+                tce = "1",
+                estimatedMag = 9.75,
+                targetType = "NASA Unvetted Candidate",
+                knownClassification = "Nevalidată Oficial (Merită Verificare Urgentă)",
+                advisoryPriority = "RECOMANDARE #1: PRIORITATE MAXIMĂ",
+                scientificReason = "Candidat gigant temperat în sectorul TESS 39. Are o scădere clară de flux neclasificată complet. Ideal pentru descoperire primară!"
+            ),
+            TargetStarCandidate(
+                ticId = "268301217",
+                name = "TIC 268301217 (TOI-2076.03 Blindspot)",
+                description = "Sub-Neptun în Zona Locuibilă (P~120-180 d estimat). A tranzitat o singură dată în Sectorul 14 și a fost ignorat de SPOC.",
+                sector = "s0014-s0014",
+                tce = "1",
+                estimatedMag = 9.20,
+                targetType = "Blindspot Sector",
+                knownClassification = "Nevalidată Oficial (Zonă Locuibilă)",
+                advisoryPriority = "RECOMANDARE #2: CERCETARE ÎNALTĂ",
+                scientificReason = "Stea strălucitoare (V=9.2) cu tranzit de 8.6 ore. Poate fi o planetă temperată de tip super-Pământ / sub-Neptun."
+            ),
+            TargetStarCandidate(
+                ticId = "100100827",
+                name = "TIC 100100827 (TOI-4633.02 Dublă Stea)",
+                description = "Tranzit circumstelar rar în sistem binar. Tranzit lung de 16.2 ore raportat de cetățeni cercetători în Sectorul 42.",
+                sector = "s0042-s0042",
+                tce = "1",
+                estimatedMag = 8.95,
+                targetType = "Circumstellar Candidate",
+                knownClassification = "Nevalidată Oficial (Arhivă TESS)",
+                advisoryPriority = "RECOMANDARE #3: PRIORITATE RIDICATĂ",
+                scientificReason = "Stea de clasă solară cu semnal puternic (3200 ppm). Are potențial enorm pentru lucrare științifică nouă."
+            ),
+            TargetStarCandidate(
+                ticId = "141913165",
+                name = "TIC 141913165 (Stea din Deep-Sky)",
+                description = "Stea izolată monitorizată în Sectorul 6. Nu există niciun raport NASA publicat, datele fotometrice brute sunt neatinse.",
+                sector = "s0006-s0006",
+                tce = "1",
+                estimatedMag = 10.1,
+                targetType = "Target Brut Neanalizat",
+                knownClassification = "Complet Necunoscută (Teren Virgin)",
+                advisoryPriority = "RECOMANDARE #4: EXPLORARE LIBERĂ",
+                scientificReason = "Stea liniștită fără pulsații rapide. Dacă Xilon găsește o scădere periodică, ești primul care o observă."
+            ),
+            TargetStarCandidate(
                 ticId = "25155310",
                 name = "TIC 25155310 (WASP-126 b Benchmark)",
-                description = "Confirmed exoplanet discovered in 2016 (SuperWASP-South). Canonical MAST tutorial benchmark target with P=3.288 d.",
+                description = "Exoplanetă confirmată istoric (SuperWASP-South, P=3.288 d). Folosită drept etalon de calibrare pentru verificarea preciziei motorului tău.",
                 sector = "s0001-s0001",
                 tce = "1",
                 estimatedMag = 11.2,
-                targetType = "Confirmed Benchmark",
-                knownClassification = "Confirmed Planet (WASP-126 b)"
+                targetType = "Etalon Calibrare",
+                knownClassification = "Planeta Cunoscută (Control)",
+                advisoryPriority = "CONTROL & CALIBRARE",
+                scientificReason = "Recomandată pentru primul test: dacă algoritmul găsește parametrii corecți ai WASP-126b, știi că funcționează perfect!"
             ),
             TargetStarCandidate(
                 ticId = "388104525",
                 name = "TIC 388104525 (WASP-119 b Benchmark)",
-                description = "Confirmed exoplanet discovered in 2016. Standard Exo.MAST documentation test star with deep 1.46% transit.",
+                description = "Exoplanetă confirmată cu tranzit adânc de 1.46%. Etalon pentru calibrarea modelului Mandel-Agol.",
                 sector = "s0001-s0001",
                 tce = "1",
                 estimatedMag = 10.4,
-                targetType = "Confirmed Benchmark",
-                knownClassification = "Confirmed Planet (WASP-119 b)"
-            ),
-            TargetStarCandidate(
-                ticId = "384159646",
-                name = "TIC 384159646 (TOI-1895.01 Candidate)",
-                description = "Long-period candidate analyzed by Planet Hunters TESS. Unconfirmed planet candidate with P=748.1 d.",
-                sector = "s0039-s0039",
-                tce = "1",
-                estimatedMag = 9.75,
-                targetType = "NASA TOI Candidate",
-                knownClassification = "Planet Candidate (TOI-1895.01)"
-            ),
-            TargetStarCandidate(
-                ticId = "141913165",
-                name = "TIC 141913165 (Deep-Sky Star)",
-                description = "Quiet star observed across Sector 6. Test case for uncatalogued transit search.",
-                sector = "s0006-s0006",
-                tce = "1",
-                estimatedMag = 10.1,
-                targetType = "Unvetted Target",
-                knownClassification = "Unvetted Target"
+                targetType = "Etalon Calibrare",
+                knownClassification = "Planeta Cunoscută (Control)",
+                advisoryPriority = "CONTROL & CALIBRARE",
+                scientificReason = "Semnal fotometric curat cu SNR ridicat pentru validarea tranzitului trapezoidal."
             )
         )
     }
@@ -115,6 +147,8 @@ class XilonRepository @Inject constructor(
                     "25155310" -> Pair(63.8569, -69.2253) // WASP-126
                     "388104525" -> Pair(57.3482, -65.1934) // WASP-119
                     "384159646" -> Pair(281.3328, -43.1491) // TOI-1895
+                    "268301217" -> Pair(217.1824, 62.4842) // TOI-2076
+                    "100100827" -> Pair(286.9154, 51.9163) // TOI-4633
                     "141913165" -> Pair(84.1481, -64.2185)
                     else -> Pair(null, null)
                 }

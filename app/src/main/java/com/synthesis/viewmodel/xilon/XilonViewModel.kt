@@ -66,7 +66,7 @@ class XilonViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    private val curatedTargets = xilonRepository.getCuratedTargets()
+    val curatedTargets: List<TargetStarCandidate> = xilonRepository.getCuratedTargets()
 
     // Real Gemini AI State
     private val _geminiAnalysis = MutableStateFlow<GeminiAnalysisResult?>(null)

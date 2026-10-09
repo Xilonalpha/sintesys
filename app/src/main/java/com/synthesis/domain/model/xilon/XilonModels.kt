@@ -104,5 +104,7 @@ data class TargetStarCandidate(
     val tce: String,
     val estimatedMag: Double,
     val targetType: String,
-    val knownClassification: String
+    val knownClassification: String,
+    val advisoryPriority: String = "MEDIUM", // HIGH_VALUE_UNVETTED, HABITABLE_ZONE_BLINDSPOT, BENCHMARK_CONTROL
+    val scientificReason: String = "Candidate star from TESS survey."
 )
