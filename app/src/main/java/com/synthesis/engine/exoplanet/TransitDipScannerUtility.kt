@@ -153,6 +153,15 @@ class TransitDipScannerUtility @Inject constructor() {
                 else -> "Scădere Recurentă #$dipCounter"
             }
 
+            // Estimate internal dip depth consistency relative to noise floor
+            val internalConsistency = ((depthPpm - noiseFloorPpm) / depthPpm.coerceAtLeast(1.0)).coerceIn(0.2, 1.0)
+            val dipConfidence = calculateTransitConfidenceScore(
+                snrSigma = snrSigma,
+                depthConsistency = internalConsistency,
+                shapeScore = shapeScore,
+                isOddEvenConsistent = true
+            )
+
             detectedDips.add(
                 DetectedDipSignal(
                     dipIndex = dipCounter++,
@@ -171,7 +180,8 @@ class TransitDipScannerUtility @Inject constructor() {
                     isPeriodicMatch = isPeriodMatch,
                     isPrimaryTransit = isPrimary,
                     phaseRangeStart = ingressPhase,
-                    phaseRangeEnd = egressPhase
+                    phaseRangeEnd = egressPhase,
+                    confidenceScore = dipConfidence
                 )
             )
         }
@@ -192,6 +202,26 @@ class TransitDipScannerUtility @Inject constructor() {
             robustSigmaPpm = noiseFloorPpm
         )
 
+        // 5. Overall Transit Signal Confidence Score
+        val overallConsistency = when {
+            oddEvenSigma != null -> {
+                kotlin.math.max(0.15, 1.0 - (oddEvenSigma / 4.0).coerceIn(0.0, 0.85))
+            }
+            primaryDip != null -> {
+                ((primaryDip.depthPpm - noiseFloorPpm) / primaryDip.depthPpm.coerceAtLeast(1.0)).coerceIn(0.3, 0.95)
+            }
+            else -> 0.0
+        }
+
+        val overallConfidence = if (primaryDip != null) {
+            calculateTransitConfidenceScore(
+                snrSigma = primaryDip.snrSigma,
+                depthConsistency = overallConsistency,
+                shapeScore = primaryDip.shapeScore,
+                isOddEvenConsistent = (oddEvenSigma ?: 0.0) < 3.0
+            )
+        } else 0.0
+
         return TransitDipScanReport(
             ticId = ticId,
             totalDipsFound = sortedDips.size,
@@ -204,7 +234,8 @@ class TransitDipScannerUtility @Inject constructor() {
             oddEvenConsistencySigma = oddEvenSigma,
             noiseFloorPpm = noiseFloorPpm,
             detectionThresholdSigma = sigmaThreshold,
-            scientificDiagnosis = diagnosis
+            scientificDiagnosis = diagnosis,
+            overallConfidenceScore = overallConfidence
         )
     }
 
@@ -346,4 +377,37 @@ class TransitDipScannerUtility @Inject constructor() {
     }
 
     private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+
+    companion object {
+        /**
+         * Calculates an astrophysical confidence score (0.0% - 100.0%) for an identified transit signal,
+         * synthesized from:
+         * 1. Signal-to-Noise Ratio (SNR) - calibrated against NASA Kepler/TESS MES standards (threshold >= 7.1 sigma)
+         * 2. Photometric Depth Consistency - stability across odd/even transits or scatter vs noise floor
+         * 3. Transit Morphology - flat-bottom U-shape vs grazing binary V-shape
+         */
+        fun calculateTransitConfidenceScore(
+            snrSigma: Double,
+            depthConsistency: Double,
+            shapeScore: Double = 0.8,
+            isOddEvenConsistent: Boolean = true
+        ): Double {
+            // 1. SNR term (saturates near 12 sigma, threshold at 7.1 sigma)
+            val snrTerm = when {
+                snrSigma <= 2.0 -> (snrSigma / 2.0).coerceIn(0.0, 0.3)
+                snrSigma < 7.1 -> 0.3 + ((snrSigma - 2.0) / 5.1) * 0.45 // 0.3 to 0.75
+                else -> 0.75 + ((snrSigma - 7.1) / 10.0).coerceAtMost(1.0) * 0.25 // 0.75 to 1.0
+            }.coerceIn(0.0, 1.0)
+
+            // 2. Depth consistency term (0.0 to 1.0)
+            val consistencyTerm = depthConsistency.coerceIn(0.0, 1.0) * if (isOddEvenConsistent) 1.0 else 0.4
+
+            // 3. Shape factor (U-shape vs V-shape)
+            val shapeTerm = shapeScore.coerceIn(0.1, 1.0)
+
+            // Weighted confidence synthesis: 50% SNR, 35% Depth Consistency, 15% Morphology
+            val rawScore = (0.50 * snrTerm + 0.35 * consistencyTerm + 0.15 * shapeTerm) * 100.0
+            return rawScore.coerceIn(5.0, 99.8)
+        }
+    }
 }

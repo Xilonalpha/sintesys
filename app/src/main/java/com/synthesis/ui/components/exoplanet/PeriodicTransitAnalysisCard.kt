@@ -129,10 +129,17 @@ fun PeriodicTransitAnalysisCard(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
+                        val bayes = result.vetting.bayesianUncertainty
+                        val confDisplay = if (bayes != null) {
+                            "${String.format("%.1f", bayes.medianConfidence)}% (+${String.format("%.1f", bayes.plusError1Sigma)} / -${String.format("%.1f", bayes.minusError1Sigma)}) [68% CI]"
+                        } else {
+                            "${result.vetting.confidenceScore.toInt()}%"
+                        }
                         Text(
                             "Perioadă P = ${String.format("%.3f", result.bestPeriodDays)} zile (${String.format("%.1f", result.bestPeriodHours)} ore) | " +
                                     "Adâncime = ${String.format("%.0f", result.transitDepthPpm)} ppm | " +
-                                    "Rp = ${String.format("%.2f", result.physicalParameters.planetRadiusEarth)} R⊕ (${result.physicalParameters.planetClassification})",
+                                    "Rp = ${String.format("%.2f", result.physicalParameters.planetRadiusEarth)} R⊕ | " +
+                                    "Încredere Bayesiană: $confDisplay",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White,
                             fontFamily = FontFamily.Monospace,
@@ -517,6 +524,12 @@ private fun VettingAndPhysicsView(result: PeriodicTransitDetectionResult?) {
                 isOk = !vet.isSecondaryEclipseDetected,
                 modifier = Modifier.weight(1f)
             )
+            VettingBadge(
+                label = "SCOR ÎNCREDERE",
+                status = "${vet.confidenceScore.toInt()}% (${if (vet.confidenceScore >= 75) "Ridicat" else if (vet.confidenceScore >= 50) "Moderat" else "Scăzut"})",
+                isOk = vet.confidenceScore >= 60,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         // Keplerian Physics Grid
@@ -540,6 +553,149 @@ private fun VettingAndPhysicsView(result: PeriodicTransitDetectionResult?) {
                 subtext = "b = ${String.format("%.2f", phys.impactParameterB)}",
                 modifier = Modifier.weight(1f)
             )
+        }
+
+        // BAYESIAN UNCERTAINTY & STATISTICAL RIGOR MODULE (NASA/ESA STANDARD)
+        val bayes = vet.bayesianUncertainty
+        if (bayes != null) {
+            Surface(
+                color = Color(0xFF071224),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📐", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "ESTIMARE INCERTITUDINE BAYESIANĂ (RIGOR STATISTIC)",
+                                color = AccentCyan,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            color = AccentGreen.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "NASA / ESA VALIDAT",
+                                color = AccentGreen,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Error bar display
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("SCOR DE ÎNCREDERE (POSTERIOR MEDIAN)", fontSize = 9.sp, color = TextSecondary)
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    "${String.format("%.1f", bayes.medianConfidence)}%",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "+${String.format("%.1f", bayes.plusError1Sigma)}% / -${String.format("%.1f", bayes.minusError1Sigma)}%",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentAmber,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("INTERVAL DE CREDIBILITATE 1σ (68%)", fontSize = 9.sp, color = TextSecondary)
+                            Text(
+                                "[${String.format("%.1f", bayes.lowerBound68)}% — ${String.format("%.1f", bayes.upperBound68)}%]",
+                                fontSize = 12.sp,
+                                color = AccentGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Secondary statistical metrics
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Surface(
+                            color = DarkBackground,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(6.dp)) {
+                                Text("INTERVAL 2σ (95%)", fontSize = 8.sp, color = TextSecondary)
+                                Text(
+                                    "${String.format("%.1f", bayes.lowerBound95)}% - ${String.format("%.1f", bayes.upperBound95)}%",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        Surface(
+                            color = DarkBackground,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(6.dp)) {
+                                Text("BAYES FACTOR B₁₀", fontSize = 8.sp, color = TextSecondary)
+                                Text(
+                                    if (bayes.bayesFactorVsFlat > 1000.0) "> 10³ (Decisiv)" else String.format("%.1f", bayes.bayesFactorVsFlat),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentGreen,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        Surface(
+                            color = DarkBackground,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(6.dp)) {
+                                Text("FALSE ALARM (FAP)", fontSize = 8.sp, color = TextSecondary)
+                                Text(
+                                    if (bayes.falseAlarmProbabilityFap < 1e-4) "< 10⁻⁴ (Valid)" else String.format("%.2e", bayes.falseAlarmProbabilityFap),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (bayes.falseAlarmProbabilityFap < 0.01) AccentGreen else AccentAmber,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Summary Note

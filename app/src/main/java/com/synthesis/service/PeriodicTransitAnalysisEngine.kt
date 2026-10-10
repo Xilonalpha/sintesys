@@ -1,6 +1,8 @@
 package com.synthesis.service
 
 import com.synthesis.domain.model.exoplanet.*
+import com.synthesis.engine.exoplanet.BayesianUncertaintyEngine
+import com.synthesis.engine.exoplanet.TransitDipScannerUtility
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.*
@@ -22,7 +24,9 @@ import kotlin.math.*
  * 7. Keplerian exoplanet physical parameter inversion (Rp, a, Teq, Habitable Zone)
  */
 @Singleton
-class PeriodicTransitAnalysisEngine @Inject constructor() {
+class PeriodicTransitAnalysisEngine @Inject constructor(
+    private val bayesianUncertaintyEngine: BayesianUncertaintyEngine
+) {
 
     // Physical Constants (SI & Astronomical)
     private val G = 6.67430e-11        // Gravitational constant (m^3 kg^-1 s^-2)
@@ -356,6 +360,28 @@ class PeriodicTransitAnalysisEngine @Inject constructor() {
         val durationRatio = bestDurationDays / maxTheoreticalDurationDays.coerceAtLeast(0.001)
         val isDurationPhysical = durationRatio in 0.05..1.4
 
+        val depthConsistencyNormalized = (if (oddEvenDiffSigma <= 1.0) {
+            1.0
+        } else {
+            max(0.1, 1.0 - (oddEvenDiffSigma - 1.0) / 4.0)
+        }) * (if (isSecDetected) 0.3 else 1.0)
+
+        val transitConfidence = TransitDipScannerUtility.calculateTransitConfidenceScore(
+            snrSigma = transitSnr,
+            depthConsistency = depthConsistencyNormalized,
+            shapeScore = if (isDurationPhysical) 0.9 else 0.5,
+            isOddEvenConsistent = isOddEvenConsistent
+        )
+
+        val bayesianMetrics = bayesianUncertaintyEngine.estimatePosteriorUncertainty(
+            rawConfidenceScore = transitConfidence,
+            snrSigma = transitSnr,
+            depthConsistency = depthConsistencyNormalized,
+            dataPointsCount = nClean,
+            inTransitPointsCount = inTransitCount,
+            deltaChiSquared = deltaChiSq
+        )
+
         val vettingMetrics = TransitVettingMetrics(
             oddTransitDepthPpm = oddDepth * 1_000_000.0,
             evenTransitDepthPpm = evenDepth * 1_000_000.0,
@@ -368,7 +394,9 @@ class PeriodicTransitAnalysisEngine @Inject constructor() {
             isDurationPhysical = isDurationPhysical,
             chiSquaredFlat = chiSqFlat / nClean,
             chiSquaredTransit = chiSqTransit / nClean,
-            deltaChiSquared = deltaChiSq
+            deltaChiSquared = deltaChiSq,
+            confidenceScore = bayesianMetrics.medianConfidence,
+            bayesianUncertainty = bayesianMetrics
         )
 
         val status = buildString {

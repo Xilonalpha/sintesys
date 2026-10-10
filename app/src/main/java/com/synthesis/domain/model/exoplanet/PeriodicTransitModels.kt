@@ -51,7 +51,9 @@ data class TransitVettingMetrics(
     val isDurationPhysical: Boolean,
     val chiSquaredFlat: Double,
     val chiSquaredTransit: Double,
-    val deltaChiSquared: Double
+    val deltaChiSquared: Double,
+    val confidenceScore: Double = 0.0, // 0.0 - 100.0% confidence based on SNR and depth consistency
+    val bayesianUncertainty: BayesianUncertaintyMetrics? = null // Rigorous Bayesian credible intervals & error bars
 )
 
 /**

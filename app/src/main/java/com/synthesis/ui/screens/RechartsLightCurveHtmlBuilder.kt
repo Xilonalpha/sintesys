@@ -3,6 +3,7 @@ package com.synthesis.ui.screens
 import com.synthesis.domain.model.exoplanet.FramePhotometrySample
 import com.synthesis.domain.model.exoplanet.PeriodicTransitDetectionResult
 import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
+import com.synthesis.domain.model.exoplanet.TemplatePhasePoint
 
 /**
  * Generates an interactive astronomical HTML5/React/Recharts dashboard
@@ -255,7 +256,10 @@ object RechartsLightCurveHtmlBuilder {
     fun buildHtml(
         dataPoints: List<PhotometricDataPoint>,
         periodicResult: PeriodicTransitDetectionResult?,
-        targetName: String = "Sursă FITS CCD/CMOS"
+        targetName: String = "Sursă FITS CCD/CMOS",
+        templatePoints: List<TemplatePhasePoint>? = null,
+        templateName: String? = null,
+        templateColorHex: String? = null
     ): String {
         val depthRatio = (periodicResult?.transitDepthFraction ?: 0.0).coerceAtLeast(0.0)
         val bestPeriod = periodicResult?.bestPeriodDays ?: 0.0
@@ -307,10 +311,20 @@ object RechartsLightCurveHtmlBuilder {
 
         // 5. Periodogram Data JSON
         val rawBls = periodicResult?.periodogram?.joinToString(prefix = "[", postfix = "]") { p ->
-            val per = Math.round(p.periodDays * 1000.0) / 1000.0
+            val per = Math.round(p.periodDays * 1000.0) / 100.0
             val pow = Math.round(p.power * 100.0) / 100.0
             """{"period":$per,"power":$pow,"depthPpm":${Math.round(p.depthPpm)}}"""
         } ?: "[]"
+
+        // 6. Template Overlay Curve JSON
+        val rawTemplate = templatePoints?.joinToString(prefix = "[", postfix = "]") { pt ->
+            val ph = Math.round(pt.phase * 1000.0) / 1000.0
+            val fl = Math.round(pt.normalizedFlux * 10000.0) / 10000.0
+            """{"phase":$ph,"templateFlux":$fl}"""
+        } ?: "[]"
+
+        val effectiveTemplateName = templateName ?: ""
+        val effectiveTemplateColor = templateColorHex ?: "#E040FB"
 
         val isDetected = periodicResult?.isDetected == true
         val periodVal = if (isDetected) String.format("%.3f", periodicResult!!.bestPeriodDays) else "--"
@@ -497,6 +511,7 @@ object RechartsLightCurveHtmlBuilder {
     const binnedData = $rawBinned;
     const modelData = $rawModel;
     const blsData = $rawBls;
+    const templateData = $rawTemplate;
 
     function CustomTooltip({ active, payload }) {
       if (active && payload && payload.length) {
@@ -506,6 +521,7 @@ object RechartsLightCurveHtmlBuilder {
           d.phase !== undefined && React.createElement("div", { style: { color: "#94A3B8" } }, "Fază = " + d.phase),
           React.createElement("div", { style: { color: "#00E5FF", fontWeight: "bold" } }, "Flux = " + d.flux),
           d.isDrop && React.createElement("div", { style: { color: "#00E676", fontWeight: "bold", marginTop: 2 } }, "★ TRANZIT PERIODIC IDENTIFICAT"),
+          d.templateFlux !== undefined && React.createElement("div", { style: { color: "$effectiveTemplateColor", fontWeight: "bold" } }, "Șablon $effectiveTemplateName = " + d.templateFlux),
           d.power !== undefined && React.createElement("div", { style: { color: "#FFB300" } }, "Putere BLS = " + d.power)
         );
       }
@@ -631,6 +647,17 @@ object RechartsLightCurveHtmlBuilder {
                 strokeWidth: 2.5,
                 dot: false,
                 isAnimationActive: false
+              }),
+              // Pre-defined Baseline Stellar Template Curve
+              templateData.length > 0 && React.createElement(Line, {
+                data: templateData,
+                type: "monotone",
+                dataKey: "templateFlux",
+                stroke: "$effectiveTemplateColor",
+                strokeWidth: 2.2,
+                strokeDasharray: "4 4",
+                dot: false,
+                isAnimationActive: false
               })
             )
           ),
@@ -678,7 +705,8 @@ object RechartsLightCurveHtmlBuilder {
             React.createElement("div", { className: "legend-item", key: "5" },
               React.createElement("div", { className: "legend-dot", style: { background: "#00E676" } }),
               React.createElement("span", null, "Model Teoretic")
-            )
+            ),
+            ${if (effectiveTemplateName.isNotBlank()) """React.createElement("div", { className: "legend-item", key: "tmpl" }, React.createElement("div", { className: "legend-dot", style: { background: "$effectiveTemplateColor" } }), React.createElement("span", null, "Șablon: $effectiveTemplateName")),""" else ""}
           ],
           activeTab === "bls" && [
             React.createElement("div", { className: "legend-item", key: "6" },

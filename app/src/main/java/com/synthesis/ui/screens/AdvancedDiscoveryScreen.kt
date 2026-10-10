@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.synthesis.R
+import com.synthesis.ui.components.exoplanet.MastBatchProcessingView
 import com.synthesis.ui.screens.cosmology.BigBangUniverseScreen
 import com.synthesis.ui.screens.cosmology.BlackHoleRelativityScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -90,6 +91,17 @@ fun AdvancedDiscoveryScreen(
     val telescopeViewfinderBitmap by viewModel.telescopeViewfinderBitmap.collectAsState()
     val periodicTransitResult by viewModel.periodicTransitResult.collectAsState()
     val exportedPdfFile by viewModel.exportedPdfFile.collectAsState()
+    val templates by viewModel.templates.collectAsState()
+    val selectedTemplate by viewModel.selectedTemplate.collectAsState()
+    val templateMatchScores by viewModel.templateMatchScores.collectAsState()
+    val isTemplateOverlayActive by viewModel.isTemplateOverlayActive.collectAsState()
+    val mastSyncState by viewModel.mastSyncState.collectAsState()
+    val lastMastResult by viewModel.lastMastResult.collectAsState()
+    val curatedMastTargets = viewModel.curatedMastTargets
+    val batchJobs by viewModel.batchJobs.collectAsState()
+    val batchSummary by viewModel.batchSummary.collectAsState()
+    val isBatchRunning by viewModel.isBatchRunning.collectAsState()
+    val batchCampaigns = viewModel.batchCampaigns
 
     var showDeblendDialog by remember { mutableStateOf(false) }
 
@@ -426,6 +438,21 @@ fun AdvancedDiscoveryScreen(
                         Toast.makeText(context, "Comandă $modeLabel trimisă: Orientare motoare către ${target.candidateName}...", Toast.LENGTH_SHORT).show()
                     }
                 )
+                AdvancedTab.MAST_BATCH -> MastBatchProcessingView(
+                    jobs = batchJobs,
+                    summary = batchSummary,
+                    isRunning = isBatchRunning,
+                    campaigns = batchCampaigns,
+                    onStartProcessing = { viewModel.startBatchProcessing(context) },
+                    onPauseProcessing = { viewModel.pauseBatchProcessing() },
+                    onEnqueueCampaign = { camp -> viewModel.enqueueBatchCampaign(camp) },
+                    onEnqueueBulkText = { text, mission -> viewModel.enqueueBulkByText(text, mission) },
+                    onCancelJob = { jobId -> viewModel.cancelBatchJob(jobId) },
+                    onClearQueue = { viewModel.clearBatchQueue() },
+                    onRetryFailed = { viewModel.retryFailedBatchJobs() },
+                    onInspectJobInLightCurve = { job -> viewModel.inspectBatchJobInLightCurve(job) }
+                )
+                AdvancedTab.MAST_SYNC,
                 AdvancedTab.FITS_SUMMARY -> FitsHeaderSummaryScreen(
                     header = telescopeVisionState.lastLoadedFitsHeader,
                     visionState = telescopeVisionState,
@@ -453,7 +480,19 @@ fun AdvancedDiscoveryScreen(
                     onOpenPdfReport = {
                         viewModel.openFitsSummaryPdf(context)
                     },
-                    exportedPdfFile = exportedPdfFile
+                    exportedPdfFile = exportedPdfFile,
+                    templates = templates,
+                    selectedTemplate = selectedTemplate,
+                    templateMatchScores = templateMatchScores,
+                    isTemplateOverlayActive = isTemplateOverlayActive,
+                    onSelectTemplate = { id -> viewModel.selectStellarTemplate(id) },
+                    onToggleTemplateOverlay = { viewModel.toggleTemplateOverlay() },
+                    onRunTemplateFit = { viewModel.runStellarTemplateFit() },
+                    mastSyncState = mastSyncState,
+                    curatedMastTargets = curatedMastTargets,
+                    lastMastResult = lastMastResult,
+                    onSyncMastTarget = { query, mission, period -> viewModel.syncMastData(query, mission, period) },
+                    onOpenBatchEngine = { viewModel.selectTab(AdvancedTab.MAST_BATCH) }
                 )
                 AdvancedTab.TELESCOPE_VISION -> TelescopeCameraVisionView(
                     visionState = telescopeVisionState,
@@ -501,6 +540,8 @@ fun AdvancedDiscoveryScreen(
                     onReset = { viewModel.resetPhotometrySession() },
                     onGenerateEtd = { viewModel.generateOfficialEtdReport() },
                     onGenerateAavso = { viewModel.generateOfficialAavsoReport() },
+                    onGenerateNasaTfop = { viewModel.generateOfficialNasaTfopReport() },
+                    onGenerateVoTable = { viewModel.generateOfficialVoTableXml() },
                     onOpenVisionEngine = { viewModel.selectTab(AdvancedTab.TELESCOPE_VISION) },
                     periodicResult = periodicTransitResult,
                     onRunPeriodicBlsScan = { pMin, pMax, rStar, mStar ->
@@ -1735,6 +1776,8 @@ fun AllModulesCatalogDialog(
                     )
                 }
                 val obsTabs = listOf(
+                    AdvancedTab.MAST_BATCH,
+                    AdvancedTab.MAST_SYNC,
                     AdvancedTab.SMART_SCOPE,
                     AdvancedTab.FITS_SUMMARY,
                     AdvancedTab.TELESCOPE_VISION,

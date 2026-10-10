@@ -2,6 +2,7 @@ package com.synthesis
 
 import com.synthesis.domain.model.exoplanet.LiveObservationSession
 import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
+import com.synthesis.engine.exoplanet.BayesianUncertaintyEngine
 import com.synthesis.service.AavsoEtdReportGenerator
 import com.synthesis.service.FitsImageParser
 import com.synthesis.service.PeriodicTransitAnalysisEngine
@@ -13,7 +14,8 @@ class AavsoEtdReportGeneratorTest {
 
     private val fitsParser = FitsImageParser()
     private val generator = AavsoEtdReportGenerator()
-    private val periodicEngine = PeriodicTransitAnalysisEngine()
+    private val bayesEngine = BayesianUncertaintyEngine()
+    private val periodicEngine = PeriodicTransitAnalysisEngine(bayesEngine)
     private val parser = PhotometricFileParser(fitsParser, periodicEngine)
 
     @Test

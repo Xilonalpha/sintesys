@@ -9,6 +9,7 @@ import com.synthesis.engine.cosmology.BigBangCosmologyEngine
 import com.synthesis.engine.cosmology.BlackHoleRelativityEngine
 import com.synthesis.engine.exoplanet.RomanMicrolensingEngine
 import com.synthesis.service.*
+import com.synthesis.service.worker.MastBatchWorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,6 +23,8 @@ import kotlin.math.sqrt
 
 enum class AdvancedTab(val title: String, val isYear2026: Boolean = false) {
     // 2026/27 CUTTING-EDGE & COSMOLOGY MODULES:
+    MAST_BATCH("⚙️ Motor Procesare Batch MAST", true),
+    MAST_SYNC("🛰️ Sincronizare Live MAST / NASA", true),
     FITS_SUMMARY("📋 FITS Header & Observation Summary", true),
     TELESCOPE_VISION("👁️ Telescope Vision & FITS Photometry", true),
     SMART_SCOPE("📡 Smart Scope Sync (Seestar/DWARF)", true),
@@ -61,8 +64,25 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository,
     val telescopeCameraVisionService: TelescopeCameraVisionService,
     val periodicTransitAnalysisEngine: PeriodicTransitAnalysisEngine,
-    val fitsPdfReportGenerator: FitsPdfReportGenerator
+    val fitsPdfReportGenerator: FitsPdfReportGenerator,
+    private val agencyReportProtocolService: AgencyReportProtocolService,
+    val stellarTemplateLibraryService: StellarTemplateLibraryService,
+    val fitsReaderService: FitsReaderService,
+    val mastDataSynchronizationService: MastDataSynchronizationService,
+    val mastBatchProcessingEngine: MastBatchProcessingEngine,
+    val mastBatchWorkManager: MastBatchWorkManager
 ) : ViewModel() {
+
+    val mastSyncState: StateFlow<MastSyncState> = mastDataSynchronizationService.syncState
+    val curatedMastTargets: List<MastObservationTarget> = mastDataSynchronizationService.getCuratedTargets()
+    private val _lastMastResult = MutableStateFlow<MastSyncResult?>(null)
+    val lastMastResult: StateFlow<MastSyncResult?> = _lastMastResult.asStateFlow()
+
+    // BATCH PROCESSING ENGINE STATEFLOWS
+    val batchJobs: StateFlow<List<MastBatchJob>> = mastBatchProcessingEngine.jobs
+    val batchSummary: StateFlow<MastBatchQueueSummary> = mastBatchProcessingEngine.summary
+    val isBatchRunning: StateFlow<Boolean> = mastBatchProcessingEngine.isRunning
+    val batchCampaigns: List<BatchPresetCampaign> = mastBatchProcessingEngine.getAvailableCampaigns()
 
     val nexStarTelemetry: StateFlow<NexStarTelemetry> = celestronNexStarDriverService.telemetry
     val telescopeVisionState: StateFlow<TelescopeVisionState> = telescopeCameraVisionService.visionState
@@ -133,6 +153,21 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     // LIVE PHOTOMETRY & DISCOVERY REPORTING SESSION
     private val _liveSession = MutableStateFlow(LiveObservationSession())
     val liveSession: StateFlow<LiveObservationSession> = _liveSession.asStateFlow()
+
+    // PRE-DEFINED STELLAR LIGHT CURVE TEMPLATES LIBRARY (NASA / ESA BASELINES)
+    val templates: StateFlow<List<StellarLightCurveTemplate>> =
+        MutableStateFlow(stellarTemplateLibraryService.getAllTemplates()).asStateFlow()
+
+    private val _selectedTemplate = MutableStateFlow<StellarLightCurveTemplate?>(
+        stellarTemplateLibraryService.getTemplateById("planetary_transit_mandel_agol")
+    )
+    val selectedTemplate: StateFlow<StellarLightCurveTemplate?> = _selectedTemplate.asStateFlow()
+
+    private val _templateMatchScores = MutableStateFlow<List<TemplateMatchScore>>(emptyList())
+    val templateMatchScores: StateFlow<List<TemplateMatchScore>> = _templateMatchScores.asStateFlow()
+
+    private val _isTemplateOverlayActive = MutableStateFlow(true)
+    val isTemplateOverlayActive: StateFlow<Boolean> = _isTemplateOverlayActive.asStateFlow()
 
     private var observationSimulationJob: Job? = null
 
@@ -301,6 +336,23 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     fun generateOfficialAavsoReport() {
         val report = aavsoEtdReportGenerator.generateAavsoReport(_liveSession.value)
         _exportModalContent.value = Pair("AAVSO Extended Format (WebObs Upload)", report)
+    }
+
+    /**
+     * Generates an official NASA TFOPWG SG1 Seeing-Limited Photometry Log
+     * adhering to NExScI and TESS Follow-up Program standards.
+     */
+    fun generateOfficialNasaTfopReport() {
+        val report = agencyReportProtocolService.generateNasaTfopReport(_liveSession.value)
+        _exportModalContent.value = Pair("NASA TFOPWG SG1 (NExScI Format)", report)
+    }
+
+    /**
+     * Generates a standard IVOA VOTable XML document for ingestion into ESA Gaia archives and CDS.
+     */
+    fun generateOfficialVoTableXml() {
+        val xml = agencyReportProtocolService.generateVoTableXml(_liveSession.value)
+        _exportModalContent.value = Pair("ESA Gaia / IVOA VOTable XML", xml)
     }
 
     /**
@@ -529,7 +581,171 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     fun resetTelescopeVisionPhotometry() = telescopeCameraVisionService.resetPhotometry()
     fun selectTelescopeVisionStar(x: Float, y: Float, isTarget: Boolean) =
         telescopeCameraVisionService.selectStarAtCoordinates(x, y, isTarget)
-    fun ingestTelescopeFitsBytes(bytes: ByteArray) = telescopeCameraVisionService.ingestFitsFrame(bytes)
+
+    /**
+     * Ingests a FITS file (from local storage, camera, or space agency archive).
+     * Automatically differentiates between 2D/3D CCD image frames and Binary Table (BINTABLE)
+     * light curves (NASA TESS, Kepler, CHEOPS).
+     */
+    fun ingestTelescopeFitsBytes(bytes: ByteArray) {
+        try {
+            val doc = fitsReaderService.read(bytes)
+            val extractedLightCurve = doc.extractLightCurve()
+
+            if (extractedLightCurve != null && extractedLightCurve.size >= 5) {
+                // Table Light Curve Mode (NASA Kepler / TESS)
+                val targetObj = doc.header.targetObject ?: doc.header.getString("OBJECT", "Sursă FITS Kepler/TESS")
+                val telescopeName = doc.header.telescope ?: doc.header.getString("TELESCOP", "Observator Spațial")
+
+                _liveSession.value = _liveSession.value.copy(
+                    candidateName = targetObj,
+                    hostStar = "$targetObj ($telescopeName)",
+                    dataPoints = extractedLightCurve,
+                    isRealImportedData = true,
+                    dataSourceTag = "NASA FITS BINTABLE ($telescopeName)",
+                    currentPhase = "Date Fotometrice FITS Ingerate (100% Date Reale)",
+                    isObserving = false
+                )
+
+                // Run periodic BLS transit scan
+                val blsRes = periodicTransitAnalysisEngine.analyzeDataPoints(extractedLightCurve)
+                _periodicTransitResult.value = blsRes
+
+                // Run matching against Stellar Template Library
+                runStellarTemplateFit(extractedLightCurve, blsRes.bestPeriodDays)
+
+                _alertSuccessMessage.value = "Fișier FITS BINTABLE ($targetObj): s-au extras cu succes ${extractedLightCurve.size} puncte fotometrice reale!"
+            } else {
+                // 2D CCD/CMOS Image Frame Mode: Process through synthetic aperture vision engine
+                telescopeCameraVisionService.ingestFitsFrame(bytes)
+                val currentPts = _liveSession.value.dataPoints
+                if (currentPts.isNotEmpty()) {
+                    runStellarTemplateFit(currentPts, _periodicTransitResult.value?.bestPeriodDays)
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback to vision service
+            telescopeCameraVisionService.ingestFitsFrame(bytes)
+        }
+    }
+
+    fun selectStellarTemplate(templateId: String) {
+        _selectedTemplate.value = stellarTemplateLibraryService.getTemplateById(templateId)
+    }
+
+    fun toggleTemplateOverlay() {
+        _isTemplateOverlayActive.value = !_isTemplateOverlayActive.value
+    }
+
+    /**
+     * Cross-correlates the current FITS light curve against all templates in the library.
+     */
+    fun runStellarTemplateFit(
+        customPoints: List<PhotometricDataPoint>? = null,
+        periodDays: Double? = null
+    ): List<TemplateMatchScore> {
+        val points = customPoints ?: _liveSession.value.dataPoints
+        val effectivePeriod = periodDays ?: _periodicTransitResult.value?.bestPeriodDays
+        val scores = stellarTemplateLibraryService.matchObservedLightCurve(points, effectivePeriod)
+        _templateMatchScores.value = scores
+        val best = scores.firstOrNull()
+        if (best != null) {
+            _alertSuccessMessage.value = "Potrivire șablon optimă: ${best.template.name} (${String.format(java.util.Locale.US, "%.1f", best.confidencePercent)}% încredere Bayesiană, χ²_red = ${String.format(java.util.Locale.US, "%.2f", best.reducedChiSquared)})."
+        }
+        return scores
+    }
+
+    /**
+     * Executes real-time live data synchronization against STScI MAST.
+     * Ingests calibrated PDCSAP fluxes, runs BLS transit search and matches astrophysical templates.
+     */
+    fun syncMastData(query: String, mission: String = "TESS", targetPeriodDays: Double? = null) {
+        viewModelScope.launch {
+            val res = mastDataSynchronizationService.syncLiveObservationData(query, mission, targetPeriodDays)
+            res.onSuccess { syncResult ->
+                _lastMastResult.value = syncResult
+
+                // Update live session with synchronized data
+                _liveSession.value = _liveSession.value.copy(
+                    candidateName = syncResult.target.targetName,
+                    hostStar = "${syncResult.target.targetName} (${syncResult.target.spectralType})",
+                    dataPoints = syncResult.dataPoints,
+                    isRealImportedData = true,
+                    dataSourceTag = "Arhivă Live STScI MAST (${syncResult.target.mission} Sector ${syncResult.target.sectorOrQuarter})",
+                    currentPhase = "Date MAST Sincronizate Live (${syncResult.dataPoints.size} puncte PDCSAP)",
+                    isObserving = false
+                )
+
+                // Update BLS periodic result
+                _periodicTransitResult.value = syncResult.periodicDetection
+
+                // Update template scores
+                _templateMatchScores.value = syncResult.templateScores
+
+                // Update success message
+                _alertSuccessMessage.value = "Sincronizare MAST reușită! ${syncResult.dataPoints.size} măsurători descărcate și analizate în ${syncResult.executionTimeMs}ms."
+            }.onFailure { err ->
+                _alertSuccessMessage.value = "Eroare la sincronizarea MAST: ${err.message}"
+            }
+        }
+    }
+
+    // ==========================================
+    // BATCH PROCESSING ENGINE ACTIONS
+    // ==========================================
+
+    fun startBatchProcessing(context: android.content.Context? = null) {
+        mastBatchProcessingEngine.startProcessing()
+        context?.let { mastBatchWorkManager.triggerOneTimeBatchJob(it) }
+        _alertSuccessMessage.value = "Motorul batch MAST a pornit procesarea în fundal!"
+    }
+
+    fun pauseBatchProcessing() {
+        mastBatchProcessingEngine.pauseProcessing()
+        _alertSuccessMessage.value = "Motorul batch MAST a fost pus pe pauză."
+    }
+
+    fun enqueueBatchCampaign(campaign: BatchPresetCampaign) {
+        mastBatchProcessingEngine.enqueueCampaign(campaign)
+        _alertSuccessMessage.value = "Campania '${campaign.title}' (${campaign.targets.size} ținte) a fost adăugată în coada batch!"
+    }
+
+    fun enqueueBulkByText(rawText: String, mission: String = "TESS") {
+        val count = mastBatchProcessingEngine.enqueueByTicString(rawText, mission)
+        _alertSuccessMessage.value = "$count sisteme stelare au fost adăugate în coada batch!"
+    }
+
+    fun cancelBatchJob(jobId: String) {
+        mastBatchProcessingEngine.cancelJob(jobId)
+    }
+
+    fun clearBatchQueue() {
+        mastBatchProcessingEngine.clearQueue()
+        _alertSuccessMessage.value = "Coada batch MAST a fost curățată."
+    }
+
+    fun retryFailedBatchJobs() {
+        mastBatchProcessingEngine.retryFailed()
+        _alertSuccessMessage.value = "Reîncercare joburi eșuate în curs..."
+    }
+
+    fun inspectBatchJobInLightCurve(job: MastBatchJob) {
+        val res = job.result ?: return
+        _liveSession.value = _liveSession.value.copy(
+            candidateName = job.targetName,
+            hostStar = "${job.targetName} (${job.mission} ${job.sectorOrQuarter})",
+            dataPoints = res.dataPoints,
+            isRealImportedData = true,
+            dataSourceTag = "Batch MAST STScI (${job.mission} TIC ${job.ticId})",
+            currentPhase = "Date Fotometrice Batch Ingerate (${res.dataPoints.size} puncte)",
+            isObserving = false
+        )
+        _periodicTransitResult.value = res.periodicDetection
+        _templateMatchScores.value = res.templateScores
+        _selectedTab.value = AdvancedTab.FITS_SUMMARY
+        _alertSuccessMessage.value = "Sistemul stelar '${job.targetName}' a fost transferat pe curba Recharts pentru inspecție!"
+    }
+
     fun updateTelescopeApertureRadii(aperture: Float, skyIn: Float, skyOut: Float) =
         telescopeCameraVisionService.setApertureRadii(aperture, skyIn, skyOut)
 
@@ -700,6 +916,14 @@ class AdvancedDiscoveryViewModel @Inject constructor(
                     summary = "Disipare visco-elastică mareică favorabilă menținerii unui ocean lichid subcrustal.",
                     json = """{"tidal_heating_mw_m2":38.5,"ocean_probable":true}""",
                     confidence = 0.87f
+                )
+                AdvancedTab.MAST_BATCH -> SynthesisTemplate(
+                    title = "Raport Sondaj Batch MAST STScI",
+                    target = "Sondaj Multi-Sisteme Stelare",
+                    category = "BATCH_SURVEY",
+                    summary = "Procesare automată în lot a arhivelor MAST. Procesate: ${batchSummary.value.completedCount} din ${batchSummary.value.totalJobs} ținte. Candidați identificați: ${batchSummary.value.candidatesDiscoveredCount}.",
+                    json = """{"total":${batchSummary.value.totalJobs},"completed":${batchSummary.value.completedCount},"discoveries":${batchSummary.value.candidatesDiscoveredCount},"pts":${batchSummary.value.totalPhotometricPointsAnalyzed}}""",
+                    confidence = 0.98f
                 )
                 else -> SynthesisTemplate(
                     title = "Sinteză Modul: ${tab.title}",

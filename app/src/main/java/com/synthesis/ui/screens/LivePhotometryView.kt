@@ -37,6 +37,8 @@ fun LivePhotometryView(
     onReset: () -> Unit,
     onGenerateEtd: () -> Unit,
     onGenerateAavso: () -> Unit,
+    onGenerateNasaTfop: () -> Unit = {},
+    onGenerateVoTable: () -> Unit = {},
     onOpenVisionEngine: () -> Unit = {},
     periodicResult: PeriodicTransitDetectionResult? = null,
     onRunPeriodicBlsScan: (Double?, Double?, Double, Double) -> Unit = { _, _, _, _ -> }
@@ -391,6 +393,35 @@ fun LivePhotometryView(
                             Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("FORMAT AAVSO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onGenerateNasaTfop,
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("NASA TFOP (SG1)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = onGenerateVoTable,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF818CF8), contentColor = Color.Black),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ESA / VOTable XML", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

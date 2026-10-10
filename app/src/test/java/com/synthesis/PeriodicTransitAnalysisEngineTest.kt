@@ -2,6 +2,7 @@ package com.synthesis
 
 import com.synthesis.domain.model.exoplanet.FramePhotometrySample
 import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
+import com.synthesis.engine.exoplanet.BayesianUncertaintyEngine
 import com.synthesis.service.*
 import org.junit.Assert.*
 import org.junit.Before
@@ -11,13 +12,15 @@ import kotlin.math.sin
 
 class PeriodicTransitAnalysisEngineTest {
 
+    private lateinit var bayesianEngine: BayesianUncertaintyEngine
     private lateinit var engine: PeriodicTransitAnalysisEngine
     private lateinit var photometryEngine: TelescopeVisionPhotometryEngine
     private lateinit var parser: PhotometricFileParser
 
     @Before
     fun setUp() {
-        engine = PeriodicTransitAnalysisEngine()
+        bayesianEngine = BayesianUncertaintyEngine()
+        engine = PeriodicTransitAnalysisEngine(bayesianEngine)
         photometryEngine = TelescopeVisionPhotometryEngine(engine)
         parser = PhotometricFileParser(FitsImageParser(), engine)
     }

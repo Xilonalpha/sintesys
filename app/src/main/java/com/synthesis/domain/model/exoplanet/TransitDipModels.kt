@@ -72,7 +72,9 @@ data class DetectedDipSignal(
     val isPeriodicMatch: Boolean,
     val isPrimaryTransit: Boolean,
     val phaseRangeStart: Double,
-    val phaseRangeEnd: Double
+    val phaseRangeEnd: Double,
+    val confidenceScore: Double = 0.0, // 0.0 - 100.0% confidence based on SNR and depth consistency
+    val bayesianUncertainty: BayesianUncertaintyMetrics? = null
 )
 
 /**
@@ -91,5 +93,7 @@ data class TransitDipScanReport(
     val noiseFloorPpm: Double,
     val detectionThresholdSigma: Double,
     val scientificDiagnosis: String,
+    val overallConfidenceScore: Double = 0.0, // 0.0 - 100.0% signal confidence based on SNR & depth consistency
+    val bayesianUncertainty: BayesianUncertaintyMetrics? = null,
     val timestampMs: Long = System.currentTimeMillis()
 )

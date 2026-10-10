@@ -35,8 +35,10 @@ import com.synthesis.service.FitsCard
 import com.synthesis.service.FitsHeader
 import com.synthesis.service.FitsPdfReportGenerator
 import com.synthesis.service.FitsWcsInfo
+import com.synthesis.ui.components.exoplanet.MastDataSynchronizationCard
 import com.synthesis.ui.components.exoplanet.PeriodicTransitAnalysisCard
 import com.synthesis.ui.components.exoplanet.RechartsLightCurveView
+import com.synthesis.ui.components.exoplanet.StellarTemplateBaselineCard
 import com.synthesis.ui.theme.*
 import java.io.File
 import kotlin.math.abs
@@ -62,7 +64,19 @@ fun FitsHeaderSummaryScreen(
     onExportPdfReport: (() -> Unit)? = null,
     onSharePdfReport: (() -> Unit)? = null,
     onOpenPdfReport: (() -> Unit)? = null,
-    exportedPdfFile: File? = null
+    exportedPdfFile: File? = null,
+    templates: List<StellarLightCurveTemplate> = emptyList(),
+    selectedTemplate: StellarLightCurveTemplate? = null,
+    templateMatchScores: List<TemplateMatchScore> = emptyList(),
+    isTemplateOverlayActive: Boolean = true,
+    onSelectTemplate: (String) -> Unit = {},
+    onToggleTemplateOverlay: () -> Unit = {},
+    onRunTemplateFit: () -> Unit = {},
+    mastSyncState: MastSyncState = MastSyncState(),
+    curatedMastTargets: List<MastObservationTarget> = emptyList(),
+    lastMastResult: MastSyncResult? = null,
+    onSyncMastTarget: (String, String, Double?) -> Unit = { _, _, _ -> },
+    onOpenBatchEngine: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val pdfGenerator = remember { FitsPdfReportGenerator() }
@@ -212,6 +226,16 @@ fun FitsHeaderSummaryScreen(
                     }
 
                     item {
+                        MastDataSynchronizationCard(
+                            syncState = mastSyncState,
+                            curatedTargets = curatedMastTargets,
+                            onSyncTarget = onSyncMastTarget,
+                            lastResult = lastMastResult,
+                            onOpenBatchEngine = onOpenBatchEngine
+                        )
+                    }
+
+                    item {
                         TelescopeCoordinatesCard(header = effectiveHeader)
                     }
 
@@ -290,10 +314,25 @@ fun FitsHeaderSummaryScreen(
                                     dataPoints = effectivePoints,
                                     periodicResult = effectivePeriodicResult,
                                     targetName = effectiveHeader.targetObject ?: "Sursă FITS CCD/CMOS",
+                                    templatePoints = if (isTemplateOverlayActive) selectedTemplate?.sampleCurve else null,
+                                    templateName = if (isTemplateOverlayActive) selectedTemplate?.name else null,
+                                    templateColorHex = selectedTemplate?.badgeColorHex,
                                     modifier = Modifier.height(340.dp)
                                 )
                             }
                         }
+                    }
+
+                    item {
+                        StellarTemplateBaselineCard(
+                            templates = templates,
+                            selectedTemplate = selectedTemplate,
+                            matchScores = templateMatchScores,
+                            isOverlayActive = isTemplateOverlayActive,
+                            onSelectTemplate = onSelectTemplate,
+                            onToggleOverlay = onToggleTemplateOverlay,
+                            onRunTemplateFit = onRunTemplateFit
+                        )
                     }
 
                     item {
@@ -346,7 +385,18 @@ fun FitsHeaderSummaryScreen(
                     )
                 }
 
-                // 2. PRIMARY RECHARTS LIGHT CURVE
+                // 2. SINCRONIZARE LIVE MAST / NASA STScI
+                item {
+                    MastDataSynchronizationCard(
+                        syncState = mastSyncState,
+                        curatedTargets = curatedMastTargets,
+                        onSyncTarget = onSyncMastTarget,
+                        lastResult = lastMastResult,
+                        onOpenBatchEngine = onOpenBatchEngine
+                    )
+                }
+
+                // 3. PRIMARY RECHARTS LIGHT CURVE
                 item {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = DarkSurface),
@@ -393,13 +443,29 @@ fun FitsHeaderSummaryScreen(
                                 dataPoints = effectivePoints,
                                 periodicResult = effectivePeriodicResult,
                                 targetName = effectiveHeader.targetObject ?: "Sursă FITS CCD/CMOS",
+                                templatePoints = if (isTemplateOverlayActive) selectedTemplate?.sampleCurve else null,
+                                templateName = if (isTemplateOverlayActive) selectedTemplate?.name else null,
+                                templateColorHex = selectedTemplate?.badgeColorHex,
                                 modifier = Modifier.height(340.dp)
                             )
                         }
                     }
                 }
 
-                // 3. EXPORT RAPORT PDF & PARTAJARE
+                // 3. BIBLIOTECĂ ȘABLOANE ASTROFIZICE (NASA / ESA BASELINES)
+                item {
+                    StellarTemplateBaselineCard(
+                        templates = templates,
+                        selectedTemplate = selectedTemplate,
+                        matchScores = templateMatchScores,
+                        isOverlayActive = isTemplateOverlayActive,
+                        onSelectTemplate = onSelectTemplate,
+                        onToggleOverlay = onToggleTemplateOverlay,
+                        onRunTemplateFit = onRunTemplateFit
+                    )
+                }
+
+                // 4. EXPORT RAPORT PDF & PARTAJARE
                 item {
                     PdfReportExportCard(
                         pdfFile = activePdfFile,

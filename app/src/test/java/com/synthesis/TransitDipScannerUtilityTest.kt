@@ -128,4 +128,69 @@ class TransitDipScannerUtilityTest {
         assertNull(report.primaryDip)
         assertEquals(DipRecurrenceVerdict.IRREGULAR_NOISE_OR_STELLAR_VARIATION, report.recurrenceVerdict)
     }
+
+    @Test
+    fun `calculateTransitConfidenceScore scales with SNR and depth consistency`() {
+        // High SNR + perfect depth consistency -> High confidence (> 80%)
+        val highConf = TransitDipScannerUtility.calculateTransitConfidenceScore(
+            snrSigma = 11.5,
+            depthConsistency = 0.95,
+            shapeScore = 0.9,
+            isOddEvenConsistent = true
+        )
+        assertTrue("High SNR and consistent depth should yield >= 80% confidence (was $highConf)", highConf >= 80.0)
+
+        // Low SNR + inconsistent depth -> Lower confidence (< 50%)
+        val lowConf = TransitDipScannerUtility.calculateTransitConfidenceScore(
+            snrSigma = 2.2,
+            depthConsistency = 0.3,
+            shapeScore = 0.4,
+            isOddEvenConsistent = false
+        )
+        assertTrue("Low SNR and inconsistent depth should yield < 50% confidence (was $lowConf)", lowConf < 50.0)
+
+        // Odd/Even inconsistency penalty
+        val consistentConf = TransitDipScannerUtility.calculateTransitConfidenceScore(
+            snrSigma = 8.0,
+            depthConsistency = 0.85,
+            isOddEvenConsistent = true
+        )
+        val inconsistentConf = TransitDipScannerUtility.calculateTransitConfidenceScore(
+            snrSigma = 8.0,
+            depthConsistency = 0.85,
+            isOddEvenConsistent = false
+        )
+        assertTrue("Consistent odd/even should be strictly higher than inconsistent ($consistentConf vs $inconsistentConf)", consistentConf > inconsistentConf)
+    }
+
+    @Test
+    fun `scanForRecurringDips assigns positive confidence score to detected dips and scan report`() {
+        val points = mutableListOf<MastPhotometryPoint>()
+        val random = Random(42)
+
+        for (i in -50..50) {
+            val phase = i * 0.01
+            val noise = (random.nextDouble() - 0.5) * 0.0005
+            val inTransit = Math.abs(phase) < 0.04
+            val dip = if (inTransit) -0.0065 else 0.0
+            points.add(
+                MastPhotometryPoint(
+                    phase = phase,
+                    detrendedFlux = dip + noise,
+                    modelFlux = dip
+                )
+            )
+        }
+
+        val report = scannerUtility.scanForRecurringDips(
+            ticId = "25155310",
+            points = points,
+            nominalPeriodDays = 3.5,
+            sigmaThreshold = 3.0
+        )
+
+        assertNotNull(report.primaryDip)
+        assertTrue("Dip confidence score should be > 60% (was ${report.primaryDip!!.confidenceScore})", report.primaryDip!!.confidenceScore > 60.0)
+        assertTrue("Overall report confidence score should be > 60% (was ${report.overallConfidenceScore})", report.overallConfidenceScore > 60.0)
+    }
 }

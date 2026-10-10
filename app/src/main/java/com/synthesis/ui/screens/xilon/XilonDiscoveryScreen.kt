@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1317,6 +1318,18 @@ fun LightCurveVisualizerCard(
                                     Text(dipReport.oddEvenDepthRatio?.let { String.format(Locale.US, "%.2f", it) } ?: "--", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
+                            Surface(
+                                color = Color(0xFF111827),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1.1f)
+                            ) {
+                                val conf = dipReport.overallConfidenceScore.toInt()
+                                val confColor = if (conf >= 80) AccentGreen else if (conf >= 60) Color(0xFFFFD600) else Color(0xFFFF5252)
+                                Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("ÎNCREDERE", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("$conf%", color = confColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
 
                         // Sensitivity Threshold Adjuster
@@ -1422,6 +1435,24 @@ fun LightCurveVisualizerCard(
                                                     Text("${String.format(Locale.US, "%.1f", dip.durationHours)}h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                                     Text("SNR: ${String.format(Locale.US, "%.1f", dip.snrSigma)}σ", color = AccentCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                                                 }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            val dipConf = dip.confidenceScore.toInt()
+                                            val dipConfColor = if (dipConf >= 80) AccentGreen else if (dipConf >= 60) Color(0xFFFFD600) else Color(0xFFFF5252)
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("ÎNCREDERE SEMNAL", color = TextSecondary, fontSize = 7.5.sp)
+                                                Text(
+                                                    "$dipConf%",
+                                                    color = dipConfColor,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
                                             }
                                         }
                                     }

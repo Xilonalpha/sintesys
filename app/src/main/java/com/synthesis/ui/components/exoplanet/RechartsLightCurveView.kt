@@ -21,6 +21,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.synthesis.domain.model.exoplanet.FramePhotometrySample
 import com.synthesis.domain.model.exoplanet.PeriodicTransitDetectionResult
 import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
+import com.synthesis.domain.model.exoplanet.TemplatePhasePoint
 import com.synthesis.ui.screens.RechartsLightCurveHtmlBuilder
 import com.synthesis.ui.theme.DarkBorder
 import com.synthesis.ui.theme.DarkSurface
@@ -36,13 +37,19 @@ fun RechartsLightCurveView(
     dataPoints: List<PhotometricDataPoint>,
     periodicResult: PeriodicTransitDetectionResult?,
     targetName: String = "Sursă FITS CCD/CMOS",
+    templatePoints: List<TemplatePhasePoint>? = null,
+    templateName: String? = null,
+    templateColorHex: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val htmlContent = remember(dataPoints, periodicResult, targetName) {
+    val htmlContent = remember(dataPoints, periodicResult, targetName, templatePoints, templateName, templateColorHex) {
         RechartsLightCurveHtmlBuilder.buildHtml(
             dataPoints = dataPoints,
             periodicResult = periodicResult,
-            targetName = targetName
+            targetName = targetName,
+            templatePoints = templatePoints,
+            templateName = templateName,
+            templateColorHex = templateColorHex
         )
     }
 

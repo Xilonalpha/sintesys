@@ -121,5 +121,138 @@ class FitsReaderServiceTest {
         assertTrue("Net source flux should be strongly positive", ap.netSourceFlux > 10000.0)
         assertTrue("SNR should be high for bright star", ap.signalToNoiseRatio > 50.0)
         println("Aperture Net Flux: ${ap.netSourceFlux}, SNR: ${ap.signalToNoiseRatio}")
+
+        // 4. Test WCS Coordinate Transformation
+        val (raDeg, decDeg) = header.wcs!!.pixelToRaDec(8.0, 8.0)!!
+        assertEquals("RA at center pixel should match CRVAL1", 298.65432, raDeg, 1e-4)
+        assertEquals("Dec at center pixel should match CRVAL2", 44.28190, decDeg, 1e-4)
+    }
+
+    @Test
+    fun testFitsLongStringAndHierarchConventions() {
+        println("=== TEST: FITS READER SERVICE - HIERARCH & LONG STRING CONTINUE ===")
+
+        val sb = StringBuilder()
+        sb.append("SIMPLE  =                    T / Standard FITS format                           ") // 80
+        sb.append("BITPIX  =                    8 / 8-bit unsigned integer                         ") // 80
+        sb.append("NAXIS   =                    0 / Header only HDU                                ") // 80
+        sb.append("OBSERVER= 'National Aeronautics and Space Administration &'                     ") // 80
+        sb.append("CONTINUE  'Astrophysics Division Transiting Exoplanet Survey'                   ") // 80
+        sb.append("HIERARCH ESO INS FILT1 NAME = 'V#74' / European Southern Observatory Filter  ") // 80
+        sb.append("END                                                                             ") // 80
+
+        while (sb.length < 2880) {
+            sb.append(" ")
+        }
+
+        val headerBytes = sb.toString().toByteArray(Charsets.US_ASCII)
+        val doc = service.read(headerBytes)
+
+        val obs = doc.header.getString("OBSERVER")
+        assertTrue("Long string should be concatenated via CONTINUE", obs.contains("National Aeronautics") && obs.contains("Astrophysics Division"))
+
+        val filterCard = doc.header.get("HIERARCH ESO INS FILT1 NAME")
+        assertNotNull("HIERARCH keyword must be indexed in header cards", filterCard)
+        assertEquals("V#74", filterCard?.asString())
+    }
+
+    @Test
+    fun testFitsBinaryTableExtensionAndLightCurveExtraction() {
+        println("=== TEST: FITS READER SERVICE - BINTABLE EXTENSION & LIGHT CURVE EXTRACTION ===")
+
+        // 1. Primary HDU Header (NAXIS=0, header only)
+        val h1 = StringBuilder()
+        h1.append("SIMPLE  =                    T / Standard FITS format                           ")
+        h1.append("BITPIX  =                    8 / Byte array                                     ")
+        h1.append("NAXIS   =                    0 / No image array in primary                      ")
+        h1.append("EXTEND  =                    T / File may contain extensions                    ")
+        h1.append("OBJECT  = 'TIC 261136679'      / TESS Target Star                               ")
+        h1.append("TELESCOP= 'TESS'               / Transiting Exoplanet Survey Satellite          ")
+        h1.append("END                                                                             ")
+        while (h1.length < 2880) h1.append(" ")
+        val primaryHeaderBytes = h1.toString().toByteArray(Charsets.US_ASCII)
+
+        // 2. BINTABLE Extension HDU Header
+        // 3 columns: TIME (1D, 8B), PDCSAP_FLUX (1D, 8B), QUALITY (1J, 4B) => Row size = 20 bytes
+        val numRows = 20
+        val rowSize = 20
+        val totalTableBytes = numRows * rowSize
+
+        val h2 = StringBuilder()
+        h2.append("XTENSION= 'BINTABLE'           / Binary Table Extension                         ")
+        h2.append("BITPIX  =                    8 / 8-bit unsigned bytes                           ")
+        h2.append("NAXIS   =                    2 / 2D table matrix                                ")
+        h2.append("NAXIS1  =                   20 / Width of row in bytes                          ")
+        h2.append("NAXIS2  =                   20 / Number of rows in table                        ")
+        h2.append("PCOUNT  =                    0 / No heap area                                   ")
+        h2.append("GCOUNT  =                    1 / Standard group count                           ")
+        h2.append("TFIELDS =                    3 / Number of columns                              ")
+        h2.append("TTYPE1  = 'TIME'               / BJD - 2457000                                  ")
+        h2.append("TFORM1  = '1D'                 / 64-bit IEEE float                              ")
+        h2.append("TUNIT1  = 'BJD - 2457000'      / Time unit                                      ")
+        h2.append("TTYPE2  = 'PDCSAP_FLUX'        / PDC Calibrated Flux                            ")
+        h2.append("TFORM2  = '1D'                 / 64-bit IEEE float                              ")
+        h2.append("TUNIT2  = 'e-/s'               / Flux unit                                      ")
+        h2.append("TTYPE3  = 'QUALITY'            / Quality Bit Flags                              ")
+        h2.append("TFORM3  = '1J'                 / 32-bit signed int                              ")
+        h2.append("END                                                                             ")
+        while (h2.length < 2880) h2.append(" ")
+        val extHeaderBytes = h2.toString().toByteArray(Charsets.US_ASCII)
+
+        // 3. BINTABLE Data Block (20 rows * 20 bytes = 400 bytes, padded to 2880)
+        val tableBuf = ByteBuffer.allocate(2880).order(ByteOrder.BIG_ENDIAN)
+        val baseBjd = 1890.5
+        val medianFlux = 45000.0
+
+        for (r in 0 until numRows) {
+            val t = baseBjd + (r * 0.02) // Cadence ~ 28.8 minutes
+            // Transit dip in middle rows (r in 8..12)
+            val flux = if (r in 8..12) medianFlux * 0.985 else medianFlux * 1.000
+            val quality = if (r == 18) 128 else 0 // Row 18 has bad quality flag
+
+            tableBuf.putDouble(t)
+            tableBuf.putDouble(flux)
+            tableBuf.putInt(quality)
+        }
+        while (tableBuf.hasRemaining()) {
+            tableBuf.put(0.toByte())
+        }
+
+        val fullFitsBytes = primaryHeaderBytes + extHeaderBytes + tableBuf.array()
+        assertEquals(2880 * 3, fullFitsBytes.size)
+
+        // 4. Parse with FitsReaderService
+        val doc = service.read(fullFitsBytes)
+        assertNotNull("Doc must be parsed", doc)
+        assertEquals("TIC 261136679", doc.header.targetObject)
+        assertEquals("TESS", doc.header.telescope)
+        assertEquals(1, doc.extensions.size)
+
+        val table = doc.binaryTable
+        assertNotNull("Binary table extension must be detected", table)
+        assertEquals(20, table?.numRows)
+        assertEquals(3, table?.columns?.size)
+
+        // Verify column lookups
+        assertNotNull("TIME column must be present", table?.get("TIME"))
+        assertNotNull("PDCSAP_FLUX column must be present", table?.get("PDCSAP_FLUX"))
+        assertNotNull("QUALITY column must be present", table?.get("QUALITY"))
+
+        // 5. Test Light Curve Extraction
+        val lightCurve = doc.extractLightCurve()
+        assertNotNull("Extracted light curve must not be null", lightCurve)
+        // Row 18 was filtered due to quality != 0, so size should be 19
+        assertEquals(19, lightCurve?.size)
+
+        // Verify normalization around 1.0
+        val baselinePt = lightCurve?.first()
+        assertNotNull(baselinePt)
+        assertEquals(1.0, baselinePt?.relativeFlux ?: 0.0, 0.01)
+
+        // Verify transit dip in middle
+        val dipPt = lightCurve?.get(8)
+        assertNotNull(dipPt)
+        assertTrue("Dip relative flux should be ~0.985", (dipPt?.relativeFlux ?: 1.0) < 0.99)
+        println("Extracted ${lightCurve?.size} valid light curve points from FITS BINTABLE! Dip flux: ${dipPt?.relativeFlux}")
     }
 }

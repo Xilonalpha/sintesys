@@ -2,6 +2,7 @@ package com.synthesis.service
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import com.synthesis.domain.model.exoplanet.PhotometricDataPoint
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
@@ -58,7 +59,54 @@ data class FitsWcsInfo(
     val cd12: Double? = null,
     val cd21: Double? = null,
     val cd22: Double? = null
-)
+) {
+    /**
+     * Converts pixel coordinates (x, y) into celestial coordinates (RA, Dec) in degrees
+     * using TAN (gnomonic) tangent plane projection conforming to Calabretta & Greisen (2002).
+     */
+    fun pixelToRaDec(pixelX: Double, pixelY: Double): Pair<Double, Double>? {
+        val ra0 = crval1 ?: return null
+        val dec0 = crval2 ?: return null
+        val x0 = crpix1 ?: return null
+        val y0 = crpix2 ?: return null
+
+        val dx = pixelX - x0
+        val dy = pixelY - y0
+
+        // Compute intermediate world coordinates (xi, eta) in degrees
+        val (xiDeg, etaDeg) = if (cd11 != null && cd22 != null) {
+            val cd12Val = cd12 ?: 0.0
+            val cd21Val = cd21 ?: 0.0
+            Pair(cd11 * dx + cd12Val * dy, cd21Val * dx + cd22 * dy)
+        } else {
+            val cd1 = cdelt1 ?: -0.00027778 // ~1 arcsec fallback
+            val cd2 = cdelt2 ?: 0.00027778
+            val rotRad = Math.toRadians(crota2 ?: 0.0)
+            val cosR = kotlin.math.cos(rotRad)
+            val sinR = kotlin.math.sin(rotRad)
+            val xi = (cd1 * dx * cosR - cd2 * dy * sinR)
+            val eta = (cd1 * dx * sinR + cd2 * dy * cosR)
+            Pair(xi, eta)
+        }
+
+        // Convert to radians for tangent gnomonic projection
+        val xiRad = Math.toRadians(xiDeg)
+        val etaRad = Math.toRadians(etaDeg)
+        val dec0Rad = Math.toRadians(dec0)
+        val ra0Rad = Math.toRadians(ra0)
+
+        val denom = kotlin.math.cos(dec0Rad) - etaRad * kotlin.math.sin(dec0Rad)
+        val raRad = ra0Rad + kotlin.math.atan2(xiRad, denom)
+        val decRad = kotlin.math.atan2(
+            kotlin.math.sin(dec0Rad) + etaRad * kotlin.math.cos(dec0Rad),
+            kotlin.math.sqrt(denom * denom + xiRad * xiRad)
+        )
+
+        val raFinalDeg = (Math.toDegrees(raRad) + 360.0) % 360.0
+        val decFinalDeg = Math.toDegrees(decRad).coerceIn(-90.0, 90.0)
+        return Pair(raFinalDeg, decFinalDeg)
+    }
+}
 
 /**
  * Structured FITS Header extracted from the 2880-byte header blocks.
@@ -422,13 +470,121 @@ class FitsRawPixelBuffer(
 }
 
 /**
+ * Astronomical column extracted from a FITS BINTABLE (Binary Table Extension) or TABLE HDU.
+ */
+data class FitsTableColumn(
+    val name: String,
+    val format: String,
+    val unit: String? = null,
+    val doubleData: DoubleArray = DoubleArray(0),
+    val intData: IntArray? = null,
+    val stringData: List<String>? = null
+) {
+    val size: Int get() = doubleData.size
+}
+
+/**
+ * Astronomical Binary Table representation conforming to NASA / IAU FITS 4.0 Standard.
+ * Holds tabular columns (e.g., TIME, SAP_FLUX, PDCSAP_FLUX, QUALITY) from Kepler, TESS, CHEOPS,
+ * or NASA Exoplanet Archive light curve products.
+ */
+data class FitsBinaryTable(
+    val numRows: Int,
+    val columns: List<FitsTableColumn>,
+    val columnMap: Map<String, FitsTableColumn>
+) {
+    fun get(columnName: String): FitsTableColumn? = columnMap[columnName.uppercase()]
+
+    fun getDoubleColumn(columnName: String): DoubleArray? = get(columnName)?.doubleData
+
+    /**
+     * Extracts normalized photometric light curve data points from standard astronomical
+     * columns (TIME / BJD, PDCSAP_FLUX / SAP_FLUX, ERROR, QUALITY).
+     */
+    fun toLightCurvePoints(): List<PhotometricDataPoint> {
+        if (numRows == 0 || columns.isEmpty()) return emptyList()
+
+        // 1. Resolve Time Column
+        val timeCol = columns.firstOrNull { col ->
+            val n = col.name.uppercase()
+            n == "TIME" || n == "BJD" || n == "HJD" || n == "DATE" || n.contains("BJD_TDB") || n.contains("TIME")
+        } ?: columns.firstOrNull() ?: return emptyList()
+
+        // 2. Resolve Flux Column (prefer PDC-SAP, then SAP, then generic FLUX)
+        val fluxCol = columns.firstOrNull { it.name.uppercase() == "PDCSAP_FLUX" }
+            ?: columns.firstOrNull { it.name.uppercase().contains("PDCSAP") }
+            ?: columns.firstOrNull { it.name.uppercase() == "SAP_FLUX" }
+            ?: columns.firstOrNull { it.name.uppercase().contains("FLUX") && !it.name.uppercase().contains("ERR") && !it.name.uppercase().contains("BKG") }
+            ?: columns.getOrNull(1)
+            ?: return emptyList()
+
+        // 3. Resolve Flux Error Column
+        val errCol = columns.firstOrNull { it.name.uppercase() == "PDCSAP_FLUX_ERR" }
+            ?: columns.firstOrNull { it.name.uppercase() == "SAP_FLUX_ERR" }
+            ?: columns.firstOrNull { it.name.uppercase().contains("ERR") }
+
+        // 4. Resolve Quality Column
+        val qualityCol = columns.firstOrNull {
+            val n = it.name.uppercase()
+            n == "QUALITY" || n == "SAP_QUALITY"
+        }
+
+        val times = timeCol.doubleData
+        val fluxes = fluxCol.doubleData
+        val errors = errCol?.doubleData
+        val qualities = qualityCol?.intData
+
+        val rawPoints = mutableListOf<Triple<Double, Double, Double>>()
+
+        for (i in 0 until numRows) {
+            if (i >= times.size || i >= fluxes.size) break
+
+            val t = times[i]
+            val f = fluxes[i]
+            val err = if (errors != null && i < errors.size) errors[i] else 0.001
+
+            // Discard bad cadences (NaNs, infinites, zero/negative flux)
+            if (t.isNaN() || t.isInfinite() || f.isNaN() || f.isInfinite() || f <= 0.0) continue
+
+            // If quality flag is present and non-zero, filter out cosmic rays / thruster firings
+            if (qualities != null && i < qualities.size && qualities[i] != 0) continue
+
+            rawPoints.add(Triple(t, f, err))
+        }
+
+        if (rawPoints.isEmpty()) return emptyList()
+
+        // Compute median flux for normalisation around 1.0
+        val sortedFlux = rawPoints.map { it.second }.sorted()
+        val medianFlux = sortedFlux[sortedFlux.size / 2].takeIf { it > 0.0 } ?: 1.0
+
+        val firstTime = rawPoints.first().first
+
+        return rawPoints.map { (t, rawF, rawErr) ->
+            val normFlux = rawF / medianFlux
+            val normErr = if (rawErr > 0.0) rawErr / medianFlux else 0.0008
+            val minOffset = (t - firstTime) * 1440.0 // Day to minutes
+            PhotometricDataPoint(
+                minuteOffset = minOffset,
+                bjdTime = t,
+                relativeFlux = normFlux,
+                fluxError = normErr
+            )
+        }
+    }
+}
+
+/**
  * A Header-Data Unit (HDU) in a FITS file.
  */
 data class FitsHdu(
     val header: FitsHeader,
     val data: FitsRawPixelBuffer?,
+    val table: FitsBinaryTable? = null,
     val isPrimary: Boolean = true
-)
+) {
+    val isBinaryTable: Boolean get() = table != null || header.getString("XTENSION") in listOf("BINTABLE", "TABLE")
+}
 
 /**
  * Parsed FITS document containing Primary HDU and optional extensions.
@@ -439,12 +595,19 @@ data class FitsDocument(
 ) {
     val allHdus: List<FitsHdu> get() = listOf(primaryHdu) + extensions
     val header: FitsHeader get() = primaryHdu.header
-    val data: FitsRawPixelBuffer? get() = primaryHdu.data
+    val data: FitsRawPixelBuffer? get() = primaryHdu.data ?: extensions.firstOrNull { it.data != null }?.data
+    val binaryTable: FitsBinaryTable? get() = primaryHdu.table ?: extensions.firstOrNull { it.table != null }?.table
+
+    /**
+     * Extracts light curve points if the FITS document contains an astronomical table
+     * (such as NASA Kepler, TESS, or CHEOPS light curve products).
+     */
+    fun extractLightCurve(): List<PhotometricDataPoint>? = binaryTable?.toLightCurvePoints()
 }
 
 /**
- * Professional service for reading, parsing, and extracting metadata and raw pixel buffers
- * from FITS (Flexible Image Transport System) files for astronomical data analysis.
+ * Professional service for reading, parsing, and extracting metadata, raw pixel buffers,
+ * and binary table light curves from FITS (Flexible Image Transport System) files for astronomical data analysis.
  */
 @Singleton
 class FitsReaderService @Inject constructor() {
@@ -480,7 +643,14 @@ class FitsReaderService @Inject constructor() {
             val remainder = (rawDataBytes % FITS_BLOCK_SIZE).toInt()
             val paddedDataBytes = if (remainder == 0) rawDataBytes else rawDataBytes + (FITS_BLOCK_SIZE - remainder)
 
-            val rawBuffer = if (numPixels > 0 && dataOffset + rawDataBytes <= bytes.size) {
+            val xtension = header.getString("XTENSION").uppercase()
+            val isTableExtension = xtension == "BINTABLE" || xtension == "TABLE" || header.getInt("TFIELDS") > 0
+
+            val table = if (isTableExtension && dataOffset + rawDataBytes <= bytes.size) {
+                parseBinaryTable(byteBuffer, header, dataOffset)
+            } else null
+
+            val rawBuffer = if (!isTableExtension && numPixels > 0 && dataOffset + rawDataBytes <= bytes.size) {
                 FitsRawPixelBuffer(
                     rawByteBuffer = byteBuffer,
                     header = header,
@@ -489,7 +659,7 @@ class FitsReaderService @Inject constructor() {
                 )
             } else null
 
-            val hdu = FitsHdu(header = header, data = rawBuffer, isPrimary = isPrimary)
+            val hdu = FitsHdu(header = header, data = rawBuffer, table = table, isPrimary = isPrimary)
             if (isPrimary) {
                 primaryHdu = hdu
                 isPrimary = false
@@ -511,6 +681,109 @@ class FitsReaderService @Inject constructor() {
 
         return FitsDocument(primaryHdu = primaryHdu, extensions = extensions)
     }
+
+    /**
+     * Decodes binary table columns from a FITS BINTABLE HDU following NASA FITS Standard 4.0.
+     */
+    fun parseBinaryTable(
+        byteBuffer: ByteBuffer,
+        header: FitsHeader,
+        dataOffset: Int
+    ): FitsBinaryTable {
+        val tfields = header.getInt("TFIELDS", 0)
+        val rowWidthBytes = header.getInt("NAXIS1", 0)
+        val numRows = header.getInt("NAXIS2", 0)
+
+        if (tfields <= 0 || rowWidthBytes <= 0 || numRows <= 0) {
+            return FitsBinaryTable(0, emptyList(), emptyMap())
+        }
+
+        val colDefs = mutableListOf<TableColDef>()
+        var runningOffset = 0
+
+        for (k in 1..tfields) {
+            val name = header.getString("TTYPE$k", "COL$k").trim()
+            val form = header.getString("TFORM$k", "1D").trim()
+            val unit = header.getString("TUNIT$k", "").ifBlank { null }
+
+            val match = Regex("""(\d*)([ADEJIKLB])""").find(form)
+            val repeat = match?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            val typeChar = match?.groupValues?.get(2)?.firstOrNull() ?: 'D'
+
+            val bytesPerElement = when (typeChar) {
+                'D' -> 8 // 64-bit float
+                'E' -> 4 // 32-bit float
+                'J' -> 4 // 32-bit int
+                'I' -> 2 // 16-bit short
+                'K' -> 8 // 64-bit int
+                'B' -> 1 // 8-bit unsigned
+                'L' -> 1 // Logical
+                'A' -> 1 // ASCII
+                else -> 8
+            }
+
+            val colBytes = repeat * bytesPerElement
+            colDefs.add(TableColDef(name, form, unit, typeChar, repeat, runningOffset, colBytes))
+            runningOffset += colBytes
+        }
+
+        val buf = byteBuffer.duplicate().order(ByteOrder.BIG_ENDIAN)
+
+        // Read columns
+        val columns = colDefs.map { def ->
+            val doubles = DoubleArray(numRows)
+            val ints = if (def.typeChar in listOf('J', 'I', 'B')) IntArray(numRows) else null
+
+            for (r in 0 until numRows) {
+                val cellPos = dataOffset + (r * rowWidthBytes) + def.offsetInRow
+                if (cellPos + def.totalBytes <= byteBuffer.capacity()) {
+                    buf.position(cellPos)
+                    when (def.typeChar) {
+                        'D' -> doubles[r] = buf.double
+                        'E' -> doubles[r] = buf.float.toDouble()
+                        'J' -> {
+                            val v = buf.int
+                            doubles[r] = v.toDouble()
+                            ints?.set(r, v)
+                        }
+                        'I' -> {
+                            val v = buf.short.toInt()
+                            doubles[r] = v.toDouble()
+                            ints?.set(r, v)
+                        }
+                        'K' -> doubles[r] = buf.long.toDouble()
+                        'B' -> {
+                            val v = (buf.get().toInt() and 0xFF)
+                            doubles[r] = v.toDouble()
+                            ints?.set(r, v)
+                        }
+                        else -> doubles[r] = 0.0
+                    }
+                }
+            }
+
+            FitsTableColumn(
+                name = def.name,
+                format = def.format,
+                unit = def.unit,
+                doubleData = doubles,
+                intData = ints
+            )
+        }
+
+        val colMap = columns.associateBy { it.name.uppercase() }
+        return FitsBinaryTable(numRows, columns, colMap)
+    }
+
+    private data class TableColDef(
+        val name: String,
+        val format: String,
+        val unit: String?,
+        val typeChar: Char,
+        val repeat: Int,
+        val offsetInRow: Int,
+        val totalBytes: Int
+    )
 
     /**
      * Reads a FITS file from an InputStream.
@@ -587,7 +860,11 @@ class FitsReaderService @Inject constructor() {
 
         while (currentOffset + FITS_CARD_SIZE <= bytes.size && !reachedEnd) {
             val cardString = String(bytes, currentOffset, FITS_CARD_SIZE, Charsets.US_ASCII)
-            val key = cardString.take(8).trim().uppercase()
+            val key = if (cardString.startsWith("HIERARCH ") && cardString.contains('=')) {
+                cardString.substring(0, cardString.indexOf('=')).trim().uppercase()
+            } else {
+                cardString.take(8).trim().uppercase()
+            }
 
             if (key.isNotEmpty()) {
                 val eqIdx = cardString.indexOf('=')
@@ -604,14 +881,36 @@ class FitsReaderService @Inject constructor() {
                         rawValue = rest.trim()
                         comment = null
                     }
+                } else if (cardString.startsWith("HIERARCH ") && cardString.contains('=')) {
+                    val hierarchEq = cardString.indexOf('=')
+                    val hierRest = cardString.substring(hierarchEq + 1)
+                    val slashIdx = hierRest.indexOf('/')
+                    if (slashIdx >= 0) {
+                        rawValue = hierRest.substring(0, slashIdx).trim()
+                        comment = hierRest.substring(slashIdx + 1).trim()
+                    } else {
+                        rawValue = hierRest.trim()
+                        comment = null
+                    }
                 } else {
                     rawValue = cardString.substring(8).trim()
                     comment = null
                 }
 
-                val card = FitsCard(key = key, rawValue = rawValue, comment = comment)
-                cards.add(card)
-                cardMap[key] = card
+                val card = if (key == "CONTINUE" && cards.isNotEmpty()) {
+                    val prevCard = cards.last()
+                    val continuedStr = rawValue.removeSurrounding("'", "'")
+                    val updatedVal = prevCard.rawValue.trimEnd('\'', '&') + continuedStr
+                    val updatedCard = prevCard.copy(rawValue = "'$updatedVal'")
+                    cards[cards.size - 1] = updatedCard
+                    cardMap[prevCard.key] = updatedCard
+                    updatedCard
+                } else {
+                    val newCard = FitsCard(key = key, rawValue = rawValue, comment = comment)
+                    cards.add(newCard)
+                    cardMap[key] = newCard
+                    newCard
+                }
 
                 when (key) {
                     "SIMPLE" -> simple = card.asBoolean() ?: simple
