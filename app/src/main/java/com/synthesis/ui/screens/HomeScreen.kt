@@ -242,11 +242,12 @@ fun HomeScreen(
             ),
             AppModuleItem(
                 id = "biosignatures",
-                title = "Astrobiologie & Tehnosemnături",
-                subtitle = "Analiză dezechilibru chimic atmosferic și semnale narrowband",
+                title = "Căutare Viață Extraterestră & Telescoape Live",
+                subtitle = "Marte (Cheyava Falls / SAM), JWST (K2-18 b DMS), SETI & Scara NASA CoLD",
                 icon = "🧬",
                 department = ScientificDepartment.LABORATORY,
-                onClick = { onViewAdvancedLab("BIOSIGNATURES") }
+                badge = "LIVE TELESCOAPE",
+                onClick = { onViewAdvancedLab("EXTRATERRESTRIAL_LIFE") }
             ),
 
             // 4. DEPARTAMENTUL COSMOLOGIE & ȘTIINȚE TERESTRE

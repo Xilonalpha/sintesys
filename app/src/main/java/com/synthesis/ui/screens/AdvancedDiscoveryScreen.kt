@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.synthesis.R
+import com.synthesis.ui.components.exoplanet.ExtraterrestrialLifeView
 import com.synthesis.ui.components.exoplanet.MastBatchProcessingView
 import com.synthesis.ui.screens.cosmology.BigBangUniverseScreen
 import com.synthesis.ui.screens.cosmology.BlackHoleRelativityScreen
@@ -102,6 +103,10 @@ fun AdvancedDiscoveryScreen(
     val batchSummary by viewModel.batchSummary.collectAsState()
     val isBatchRunning by viewModel.isBatchRunning.collectAsState()
     val batchCampaigns = viewModel.batchCampaigns
+    val extraterrestrialTargets by viewModel.extraterrestrialTargets.collectAsState()
+    val activeTelescopeFeeds by viewModel.activeTelescopeFeeds.collectAsState()
+    val liveAstrobiologySyncResult by viewModel.liveAstrobiologySyncResult.collectAsState()
+    val isSyncingAstrobiology by viewModel.isSyncingAstrobiology.collectAsState()
 
     var showDeblendDialog by remember { mutableStateOf(false) }
 
@@ -389,7 +394,14 @@ fun AdvancedDiscoveryScreen(
             }
 
             when (selectedTab) {
-                AdvancedTab.BIOSIGNATURES -> AstrobiologyView(biosignatures, technosignatures)
+                AdvancedTab.EXTRATERRESTRIAL_LIFE,
+                AdvancedTab.BIOSIGNATURES -> ExtraterrestrialLifeView(
+                    targets = extraterrestrialTargets,
+                    telescopeFeeds = activeTelescopeFeeds,
+                    liveSyncResult = liveAstrobiologySyncResult,
+                    isSyncing = isSyncingAstrobiology,
+                    onTriggerLiveNasaSync = { viewModel.triggerLiveNasaAstrobiologySync() }
+                )
                 AdvancedTab.FALSE_POSITIVE_RESCUE -> FalsePositiveRescueView(
                     rescues = dilutionRescues,
                     onOpenDeblender = { showDeblendDialog = true }
@@ -1805,6 +1817,7 @@ fun AllModulesCatalogDialog(
                     )
                 }
                 val specTabs = listOf(
+                    AdvancedTab.EXTRATERRESTRIAL_LIFE,
                     AdvancedTab.JWST_SPECTROSCOPY,
                     AdvancedTab.PLATO_ASTEROSEISMOLOGY,
                     AdvancedTab.ROMAN_MICROLENSING,

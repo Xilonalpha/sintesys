@@ -23,6 +23,7 @@ import kotlin.math.sqrt
 
 enum class AdvancedTab(val title: String, val isYear2026: Boolean = false) {
     // 2026/27 CUTTING-EDGE & COSMOLOGY MODULES:
+    EXTRATERRESTRIAL_LIFE("🧬 Viață Extraterestră & Telescoape Live", true),
     MAST_BATCH("⚙️ Motor Procesare Batch MAST", true),
     MAST_SYNC("🛰️ Sincronizare Live MAST / NASA", true),
     FITS_SUMMARY("📋 FITS Header & Observation Summary", true),
@@ -70,8 +71,22 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     val fitsReaderService: FitsReaderService,
     val mastDataSynchronizationService: MastDataSynchronizationService,
     val mastBatchProcessingEngine: MastBatchProcessingEngine,
-    val mastBatchWorkManager: MastBatchWorkManager
+    val mastBatchWorkManager: MastBatchWorkManager,
+    val extraterrestrialLifeService: ExtraterrestrialLifeService
 ) : ViewModel() {
+
+    // EXTRATERRESTRIAL LIFE & REAL TELESCOPES FLEET STATEFLOWS
+    private val _extraterrestrialTargets = MutableStateFlow<List<ExtraterrestrialTarget>>(emptyList())
+    val extraterrestrialTargets: StateFlow<List<ExtraterrestrialTarget>> = _extraterrestrialTargets.asStateFlow()
+
+    private val _activeTelescopeFeeds = MutableStateFlow<List<ActiveTelescopeTelemetry>>(emptyList())
+    val activeTelescopeFeeds: StateFlow<List<ActiveTelescopeTelemetry>> = _activeTelescopeFeeds.asStateFlow()
+
+    private val _liveAstrobiologySyncResult = MutableStateFlow(LiveAstrobiologySyncResult())
+    val liveAstrobiologySyncResult: StateFlow<LiveAstrobiologySyncResult> = _liveAstrobiologySyncResult.asStateFlow()
+
+    private val _isSyncingAstrobiology = MutableStateFlow(false)
+    val isSyncingAstrobiology: StateFlow<Boolean> = _isSyncingAstrobiology.asStateFlow()
 
     val mastSyncState: StateFlow<MastSyncState> = mastDataSynchronizationService.syncState
     val curatedMastTargets: List<MastObservationTarget> = mastDataSynchronizationService.getCuratedTargets()
@@ -94,7 +109,7 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     private val _periodicTransitResult = MutableStateFlow<PeriodicTransitDetectionResult?>(null)
     val periodicTransitResult: StateFlow<PeriodicTransitDetectionResult?> = _periodicTransitResult.asStateFlow()
 
-    private val _selectedTab = MutableStateFlow(AdvancedTab.SMART_SCOPE)
+    private val _selectedTab = MutableStateFlow(AdvancedTab.EXTRATERRESTRIAL_LIFE)
     val selectedTab: StateFlow<AdvancedTab> = _selectedTab.asStateFlow()
 
     private val _biosignatures = MutableStateFlow<List<BiosignatureAssessment>>(emptyList())
@@ -182,6 +197,8 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     }
 
     private fun loadData() {
+        _extraterrestrialTargets.value = extraterrestrialLifeService.getCuratedExtraterrestrialTargets()
+        _activeTelescopeFeeds.value = extraterrestrialLifeService.getActiveTelescopeTelemetryFeeds()
         _biosignatures.value = repository.getCuratedBiosignatures()
         _technosignatures.value = repository.getCuratedTechnosignatures()
         _dilutionRescues.value = repository.getCuratedDilutionRescues()
@@ -295,7 +312,9 @@ class AdvancedDiscoveryViewModel @Inject constructor(
             AdvancedTab.LIVE_PHOTOMETRY -> {
                 resetPhotometrySession()
             }
-            AdvancedTab.BIOSIGNATURES -> {
+            AdvancedTab.EXTRATERRESTRIAL_LIFE, AdvancedTab.BIOSIGNATURES -> {
+                _extraterrestrialTargets.value = extraterrestrialLifeService.getCuratedExtraterrestrialTargets()
+                _activeTelescopeFeeds.value = extraterrestrialLifeService.getActiveTelescopeTelemetryFeeds()
                 _biosignatures.value = repository.getCuratedBiosignatures()
                 _technosignatures.value = repository.getCuratedTechnosignatures()
             }
@@ -857,6 +876,16 @@ class AdvancedDiscoveryViewModel @Inject constructor(
         }
     }
 
+    fun triggerLiveNasaAstrobiologySync() {
+        viewModelScope.launch {
+            _isSyncingAstrobiology.value = true
+            val result = extraterrestrialLifeService.queryLiveHabitableZoneArchive()
+            _liveAstrobiologySyncResult.value = result
+            _isSyncingAstrobiology.value = false
+            _alertSuccessMessage.value = result.statusMessage
+        }
+    }
+
     fun saveCurrentModuleToResearchArchive(tab: AdvancedTab) {
         viewModelScope.launch {
             data class SynthesisTemplate(
@@ -869,6 +898,14 @@ class AdvancedDiscoveryViewModel @Inject constructor(
             )
 
             val template = when (tab) {
+                AdvancedTab.EXTRATERRESTRIAL_LIFE -> SynthesisTemplate(
+                    title = "Descoperire Viață Extraterestră & Telescoape Live",
+                    target = "Marte (Cheyava Falls) & JWST (K2-18 b DMS)",
+                    category = "ASTROBIOLOGY",
+                    summary = "Evaluare biosemnături reale (SHERLOC Raman C-H / Vivianit, JWST DMS 3.4 μm) conform Scării Oficiale NASA CoLD (Confidence of Life Detection).",
+                    json = """{"missions":["Perseverance","JWST","Europa Clipper"],"cold_scale_level":3,"cheyava_falls_sigma":5.8,"dms_sigma":2.4}""",
+                    confidence = 0.94f
+                )
                 AdvancedTab.FITS_SUMMARY -> SynthesisTemplate(
                     title = "Sumar Observațional Header FITS & Fotometrie",
                     target = telescopeVisionState.value.lastLoadedFitsHeader?.targetObject ?: "TOI-1895 / TIC 384159821",
