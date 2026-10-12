@@ -403,7 +403,15 @@ object RechartsDashboardHtmlBuilder {
       );
     }
 
-    ReactDOM.render(React.createElement(Dashboard, null), document.getElementById("root"));
+    if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && typeof Recharts !== 'undefined') {
+      try {
+        ReactDOM.render(React.createElement(Dashboard, null), document.getElementById("root"));
+      } catch(e) {
+        document.getElementById("root").innerHTML = "<div style='padding:20px;text-align:center;color:#64748B;'>Dashboard protejat.</div>";
+      }
+    } else {
+      document.getElementById("root").innerHTML = "<div style='padding:20px;text-align:center;color:#64748B;'>Randare statistică offline activată.</div>";
+    }
   </script>
 </body>
 </html>

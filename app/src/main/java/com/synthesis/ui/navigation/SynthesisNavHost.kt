@@ -96,7 +96,13 @@ fun SynthesisNavHost(
             ExoplanetScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onViewDashboard = { navController.navigate("exoplanet_dashboard") },
-                onViewXilonDiscovery = { navController.navigate("xilon_discovery") },
+                onViewXilonDiscovery = { tic ->
+                    if (tic != null) {
+                        navController.navigate("xilon_discovery?tic=$tic")
+                    } else {
+                        navController.navigate("xilon_discovery")
+                    }
+                },
                 onViewDeepHunt = { navController.navigate("deep_hunt") },
                 onViewAdvancedLab = { navController.navigate("advanced_lab") },
                 onViewTerraFrontier = { navController.navigate("terra_frontier") }
@@ -104,6 +110,20 @@ fun SynthesisNavHost(
         }
         composable("exoplanet_dashboard") {
             ExoplanetDashboardScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            "xilon_discovery?tic={tic}",
+            arguments = listOf(navArgument("tic") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            })
+        ) { backStackEntry ->
+            val tic = backStackEntry.arguments?.getString("tic")
+            XilonDiscoveryScreen(
+                initialTicId = tic,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

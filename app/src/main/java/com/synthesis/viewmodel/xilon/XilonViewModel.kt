@@ -71,6 +71,7 @@ class XilonViewModel @Inject constructor(
     )
 
     val curatedTargets: List<TargetStarCandidate> = xilonRepository.getCuratedTargets()
+    val pureTicCatalog: List<PureTicCandidate> = xilonRepository.getPureTicCatalog()
 
     // Transit Dip Scanner State
     private val _dipScanReport = MutableStateFlow<TransitDipScanReport?>(null)

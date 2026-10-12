@@ -53,5 +53,6 @@ enum class ExoplanetCatalogSource(val displayName: String, val badgeColorHex: Lo
     PHL_HABITABLE("PHL Habitable (Arecibo)", 0xFF00E676),
     CHEOPS_GAIA("ESA CHEOPS & Gaia", 0xFF00B0FF),
     UNVETTED_DISCOVERY("Unvetted Candidate", 0xFFE040FB),
+    PURE_TIC_CATALOG("TIC Pur (Fără TOI)", 0xFFFF1744),
     CONFIRMED_BENCHMARK("Confirmed Exoplanet", 0xFF7C4DFF)
 }

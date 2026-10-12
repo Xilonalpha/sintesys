@@ -74,7 +74,8 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     val mastDataSynchronizationService: MastDataSynchronizationService,
     val mastBatchProcessingEngine: MastBatchProcessingEngine,
     val mastBatchWorkManager: MastBatchWorkManager,
-    val extraterrestrialLifeService: ExtraterrestrialLifeService
+    val extraterrestrialLifeService: ExtraterrestrialLifeService,
+    val spectralAnomalyService: PlanetarySpectralAnomalyService
 ) : ViewModel() {
 
     // EXTRATERRESTRIAL LIFE & REAL TELESCOPES FLEET STATEFLOWS
@@ -140,6 +141,29 @@ class AdvancedDiscoveryViewModel @Inject constructor(
 
     private val _jwstSpectra = MutableStateFlow<List<JwstTransmissionSpectrumResult>>(emptyList())
     val jwstSpectra: StateFlow<List<JwstTransmissionSpectrumResult>> = _jwstSpectra.asStateFlow()
+
+    // PLANETARY SPECTRAL ANOMALY & PUBLIC REGISTRY COMPARISON
+    val curatedRetrievedSpectra: List<RetrievedPlanetarySpectrum> = spectralAnomalyService.getCuratedRetrievedSpectra()
+    private val _selectedRetrievedSpectrum = MutableStateFlow<RetrievedPlanetarySpectrum>(curatedRetrievedSpectra.first())
+    val selectedRetrievedSpectrum: StateFlow<RetrievedPlanetarySpectrum> = _selectedRetrievedSpectrum.asStateFlow()
+
+    private val _publicRegistryBenchmarks = MutableStateFlow<List<RegisteredSpectralBenchmark>>(emptyList())
+    val publicRegistryBenchmarks: StateFlow<List<RegisteredSpectralBenchmark>> = _publicRegistryBenchmarks.asStateFlow()
+
+    private val _selectedBenchmarkId = MutableStateFlow<String?>(null)
+    val selectedBenchmarkId: StateFlow<String?> = _selectedBenchmarkId.asStateFlow()
+
+    private val _spectralComparisonResult = MutableStateFlow<PublicRegistryComparisonResult?>(null)
+    val spectralComparisonResult: StateFlow<PublicRegistryComparisonResult?> = _spectralComparisonResult.asStateFlow()
+
+    private val _isComparingSpectra = MutableStateFlow(false)
+    val isComparingSpectra: StateFlow<Boolean> = _isComparingSpectra.asStateFlow()
+
+    private val _nasaArchiveDisposition = MutableStateFlow<PublicArchiveDispositionInfo?>(null)
+    val nasaArchiveDisposition: StateFlow<PublicArchiveDispositionInfo?> = _nasaArchiveDisposition.asStateFlow()
+
+    private val _isQueryingNasaArchive = MutableStateFlow(false)
+    val isQueryingNasaArchive: StateFlow<Boolean> = _isQueryingNasaArchive.asStateFlow()
 
     private val _exomoons = MutableStateFlow<List<ExomoonTidalOceanResult>>(emptyList())
     val exomoons: StateFlow<List<ExomoonTidalOceanResult>> = _exomoons.asStateFlow()
@@ -211,6 +235,9 @@ class AdvancedDiscoveryViewModel @Inject constructor(
         _jwstSpectra.value = repository.getCuratedJwstSpectra()
         _exomoons.value = repository.getCuratedExomoons()
         _spaceWeatherAssessments.value = repository.getCuratedSpaceWeatherAssessments()
+        // Spectral anomaly public registry initialization
+        _publicRegistryBenchmarks.value = spectralAnomalyService.registry.getAllBenchmarks()
+        runSpectralAnomalyComparison(_selectedRetrievedSpectrum.value, null)
     }
 
     /**
@@ -357,6 +384,43 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     fun generateOfficialAavsoReport() {
         val report = aavsoEtdReportGenerator.generateAavsoReport(_liveSession.value)
         _exportModalContent.value = Pair("AAVSO Extended Format (WebObs Upload)", report)
+    }
+
+    // --- PLANETARY SPECTRAL ANOMALY & PUBLIC REGISTRY COMPARISON METHODS ---
+
+    fun selectRetrievedSpectrum(spectrum: RetrievedPlanetarySpectrum) {
+        _selectedRetrievedSpectrum.value = spectrum
+        _nasaArchiveDisposition.value = null
+        runSpectralAnomalyComparison(spectrum, _selectedBenchmarkId.value)
+    }
+
+    fun selectBenchmarkId(benchmarkId: String?) {
+        _selectedBenchmarkId.value = benchmarkId
+        runSpectralAnomalyComparison(_selectedRetrievedSpectrum.value, benchmarkId)
+    }
+
+    fun runSpectralAnomalyComparison(
+        spectrum: RetrievedPlanetarySpectrum? = null,
+        benchmarkId: String? = null
+    ) {
+        viewModelScope.launch {
+            _isComparingSpectra.value = true
+            val target = spectrum ?: _selectedRetrievedSpectrum.value
+            val bench = benchmarkId ?: _selectedBenchmarkId.value
+            val result = spectralAnomalyService.compareAgainstPublicRegistry(target, bench)
+            _spectralComparisonResult.value = result
+            _isComparingSpectra.value = false
+        }
+    }
+
+    fun queryNasaArchiveForCurrentTarget() {
+        viewModelScope.launch {
+            _isQueryingNasaArchive.value = true
+            val targetName = _selectedRetrievedSpectrum.value.targetName
+            val disposition = spectralAnomalyService.queryNasaArchiveForTarget(targetName)
+            _nasaArchiveDisposition.value = disposition
+            _isQueryingNasaArchive.value = false
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.synthesis.ui.screens
 
 import android.annotation.SuppressLint
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,8 +18,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.ExoplanetCandidate
@@ -163,23 +166,80 @@ fun RechartsWebViewDashboard(
     candidates: List<ExoplanetCandidate>,
     modifier: Modifier = Modifier
 ) {
+    var hasRendererCrashed by remember { mutableStateOf(false) }
+
     val htmlContent = remember(candidates) {
         RechartsDashboardHtmlBuilder.buildHtml(candidates)
     }
 
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            WebView(context).apply {
-                setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.loadWithOverviewMode = true
-                settings.useWideViewPort = true
-                settings.cacheMode = WebSettings.LOAD_DEFAULT
-                setBackgroundColor(0xFF0A0E17.toInt())
-                webViewClient = WebViewClient()
-                loadDataWithBaseURL(
+    if (hasRendererCrashed) {
+        Card(
+            modifier = modifier.fillMaxWidth().height(260.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("📊", fontSize = 28.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    "Dashboard Statistic Exoplanete",
+                    color = AccentCyan,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "${candidates.size} exoplanete încărcate. Procesul WebView a fost protejat pentru stabilitatea sistemului.",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = { hasRendererCrashed = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text("Reîncearcă Randare Recharts", color = DarkBackground, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    } else {
+        AndroidView(
+            modifier = modifier,
+            factory = { context ->
+                WebView(context).apply {
+                    setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    setBackgroundColor(0xFF0A0E17.toInt())
+                    webViewClient = object : WebViewClient() {
+                        override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                            hasRendererCrashed = true
+                            try {
+                                view?.destroy()
+                            } catch (_: Exception) {}
+                            return true
+                        }
+                    }
+                    loadDataWithBaseURL(
+                        "https://exoplanetarchive.ipac.caltech.edu/",
+                        htmlContent,
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                }
+            },
+            update = { webView ->
+                webView.loadDataWithBaseURL(
                     "https://exoplanetarchive.ipac.caltech.edu/",
                     htmlContent,
                     "text/html",
@@ -187,17 +247,8 @@ fun RechartsWebViewDashboard(
                     null
                 )
             }
-        },
-        update = { webView ->
-            webView.loadDataWithBaseURL(
-                "https://exoplanetarchive.ipac.caltech.edu/",
-                htmlContent,
-                "text/html",
-                "UTF-8",
-                null
-            )
-        }
-    )
+        )
+    }
 }
 
 @Composable

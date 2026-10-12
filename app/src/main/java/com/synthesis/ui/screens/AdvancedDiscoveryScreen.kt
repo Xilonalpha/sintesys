@@ -605,7 +605,8 @@ fun AdvancedDiscoveryScreen(
                     targets = platoTargets
                 )
                 AdvancedTab.JWST_SPECTROSCOPY -> JwstTransmissionSpectroscopyView(
-                    spectra = jwstSpectra
+                    spectra = jwstSpectra,
+                    viewModel = viewModel
                 )
                 AdvancedTab.ROMAN_MICROLENSING -> RomanMicrolensingView(
                     engine = viewModel.romanMicrolensingEngine

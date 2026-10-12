@@ -87,6 +87,7 @@ import kotlin.math.abs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun XilonDiscoveryScreen(
+    initialTicId: String? = null,
     onNavigateBack: () -> Unit,
     viewModel: XilonViewModel = hiltViewModel()
 ) {
@@ -102,8 +103,18 @@ fun XilonDiscoveryScreen(
     val dipSensitivity by viewModel.dipSensitivitySigma.collectAsState()
     val isDipHighlightActive by viewModel.isDipHighlightActive.collectAsState()
     var showGeminiKeyDialog by remember { mutableStateOf(false) }
-    var ticInput by remember { mutableStateOf("25155310") }
+    var ticInput by remember { mutableStateOf(initialTicId?.replace("TIC", "", ignoreCase = true)?.trim()?.ifBlank { "25155310" } ?: "25155310") }
     val context = LocalContext.current
+
+    LaunchedEffect(initialTicId) {
+        if (!initialTicId.isNullOrBlank()) {
+            val clean = initialTicId.replace("TIC", "", ignoreCase = true).trim()
+            if (clean.isNotBlank()) {
+                ticInput = clean
+                viewModel.runScan(clean)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -266,118 +277,364 @@ fun XilonDiscoveryScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
                         
-                        // SCIENTIFIC ADVISOR: TARGET COUNSELING (WHICH ONES DESERVE VERIFICATION)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "CONSILIER ASTRONOMIC: CE STELE MERITĂ VERIFICATE?",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Text(
-                                "Prioritizare NASA & Blindspots",
-                                color = AccentCyan,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-
+                        var catalogTab by remember { mutableIntStateOf(0) }
+                        val pureTicList = viewModel.pureTicCatalog
                         val curatedList = viewModel.curatedTargets
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            curatedList.forEach { target ->
-                                val isSelected = ticInput == target.ticId
-                                val isHighPriority = target.advisoryPriority.contains("PRIORITATE MAXIMĂ") || target.advisoryPriority.contains("CERCETARE ÎNALTĂ")
-                                val isControl = target.advisoryPriority.contains("CONTROL")
-                                
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            ticInput = target.ticId
-                                            viewModel.runScan(target.ticId)
-                                        },
-                                    color = if (isSelected) AccentCyan.copy(alpha = 0.15f) else Color(0xFF0F172A),
-                                    shape = RoundedCornerShape(10.dp),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        if (isSelected) AccentCyan
-                                        else if (isHighPriority) AccentAmber.copy(alpha = 0.6f)
-                                        else if (isControl) Color(0xFF334155)
-                                        else AccentGreen.copy(alpha = 0.4f)
-                                    )
+
+                        // Tab Switcher Row: Pure TIC vs NASA Curated
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF0F172A), RoundedCornerShape(8.dp))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { catalogTab = 0 },
+                                color = if (catalogTab == 0) Color(0xFFFF1744).copy(alpha = 0.25f) else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp),
+                                border = if (catalogTab == 0) BorderStroke(1.dp, Color(0xFFFF5252)) else null
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                                Surface(
-                                                    color = if (isHighPriority) AccentAmber.copy(alpha = 0.2f)
-                                                           else if (isControl) Color(0xFF334155)
-                                                           else AccentGreen.copy(alpha = 0.2f),
-                                                    shape = RoundedCornerShape(4.dp)
-                                                ) {
+                                    Text("🪐", fontSize = 13.sp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        "TIC FĂRĂ TOI (${pureTicList.size})",
+                                        color = if (catalogTab == 0) Color(0xFFFF5252) else TextSecondary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { catalogTab = 1 },
+                                color = if (catalogTab == 1) AccentCyan.copy(alpha = 0.25f) else Color.Transparent,
+                                shape = RoundedCornerShape(6.dp),
+                                border = if (catalogTab == 1) BorderStroke(1.dp, AccentCyan) else null
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text("🛰️", fontSize = 13.sp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        "RECOMANDĂRI NASA (${curatedList.size})",
+                                        color = if (catalogTab == 1) AccentCyan else TextSecondary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (catalogTab == 0) {
+                            // PURE TIC CATALOG (NO TOI IN NASA)
+                            Surface(
+                                color = Color(0xFF1E1015),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.4f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("⚡", fontSize = 14.sp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            "CATALOG PUR: CANDIDAȚI TIC FĂRĂ TOI OFICIAL",
+                                            color = Color(0xFFFF5252),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Aceste stele din TESS Input Catalog (TIC) au tranzite reale detectate (Planet Hunters, mono-tranzite lungi, căutări TLS comunitare) dar NASA nu le-a emis alertă TOI din cauza filtrelor automate. Datele sunt virgine în MAST!",
+                                        color = TextSecondary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                pureTicList.forEach { candidate ->
+                                    val isSelected = ticInput == candidate.ticId
+
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                ticInput = candidate.ticId
+                                                viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
+                                            },
+                                        color = if (isSelected) Color(0xFFFF1744).copy(alpha = 0.15f) else Color(0xFF0F172A),
+                                        shape = RoundedCornerShape(10.dp),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isSelected) Color(0xFFFF5252) else Color(0xFF334155)
+                                        )
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            candidate.name,
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) Color(0xFFFF5252) else Color.White
+                                                        )
+                                                    }
                                                     Text(
-                                                        target.advisoryPriority,
-                                                        color = if (isHighPriority) AccentAmber else if (isControl) TextSecondary else AccentGreen,
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        "${candidate.sector} • Mag: ${String.format(Locale.US, "%.2f", candidate.apparentMag)} • Distanță: ${candidate.distancePc.toInt()} pc",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = TextSecondary,
+                                                        fontSize = 10.sp
                                                     )
                                                 }
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    target.name,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isSelected) AccentCyan else Color.White
-                                                )
-                                            }
-                                            
-                                            Button(
-                                                onClick = {
-                                                    ticInput = target.ticId
-                                                    viewModel.runScan(target.ticId)
-                                                },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = if (isSelected) AccentCyan else Color(0xFF1E293B),
-                                                    contentColor = if (isSelected) Color.Black else AccentCyan
-                                                ),
-                                                shape = RoundedCornerShape(6.dp),
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                modifier = Modifier.height(28.dp)
-                                            ) {
-                                                Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
 
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            target.scientificReason,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isHighPriority) Color(0xFFFDE68A) else TextSecondary,
-                                            fontSize = 11.sp
+                                                Button(
+                                                    onClick = {
+                                                        ticInput = candidate.ticId
+                                                        viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
+                                                        Toast.makeText(context, "Lansare scanare Xilon pentru TIC ${candidate.ticId}...", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = if (isSelected) Color(0xFFFF1744) else Color(0xFFDC2626),
+                                                        contentColor = Color.White
+                                                    ),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                    modifier = Modifier.height(30.dp)
+                                                ) {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            // Badges Row
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(color = Color(0xFFFF1744).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                    Text(
+                                                        "TIC PUR • 0 TOI",
+                                                        color = Color(0xFFFF5252),
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                if (candidate.isInHabitableZone) {
+                                                    Surface(color = AccentGreen.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                        Text(
+                                                            "ZONĂ LOCUIBILĂ",
+                                                            color = AccentGreen,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Surface(color = AccentAmber.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                    Text(
+                                                        candidate.scientificPriority,
+                                                        color = AccentAmber,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            // Metrics grid
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Surface(
+                                                    color = Color(0xFF1E293B),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Column(modifier = Modifier.padding(6.dp)) {
+                                                        Text("ADÂNCIME", color = TextSecondary, fontSize = 8.sp)
+                                                        Text("${candidate.transitDepthPpm.toInt()} ppm", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                Surface(
+                                                    color = Color(0xFF1E293B),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Column(modifier = Modifier.padding(6.dp)) {
+                                                        Text("PERIOADĂ", color = TextSecondary, fontSize = 8.sp)
+                                                        Text(candidate.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.1f", it)} d" } ?: "Mono-tranzit", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                Surface(
+                                                    color = Color(0xFF1E293B),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Column(modifier = Modifier.padding(6.dp)) {
+                                                        Text("DURATĂ", color = TextSecondary, fontSize = 8.sp)
+                                                        Text("${candidate.transitDurationHours} h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                Surface(
+                                                    color = Color(0xFF1E293B),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Column(modifier = Modifier.padding(6.dp)) {
+                                                        Text("TEFF STEA", color = TextSecondary, fontSize = 8.sp)
+                                                        Text("${candidate.stellarTeffK.toInt()} K", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                "Tip estimat: ${candidate.potentialPlanetaryType}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color(0xFFE2E8F0),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                "De ce NU are TOI: ${candidate.whyNoToi}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color(0xFFFDE68A),
+                                                fontSize = 10.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                "Sursă: ${candidate.discoveryOrigin} • ${candidate.scientificNotes}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextSecondary,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // CURATED TARGETS (NASA TOI & CONTROL)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                curatedList.forEach { target ->
+                                    val isSelected = ticInput == target.ticId
+                                    val isHighPriority = target.advisoryPriority.contains("PRIORITATE MAXIMĂ") || target.advisoryPriority.contains("CERCETARE ÎNALTĂ")
+                                    val isControl = target.advisoryPriority.contains("CONTROL")
+                                    
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                ticInput = target.ticId
+                                                viewModel.runScan(target.ticId)
+                                            },
+                                        color = if (isSelected) AccentCyan.copy(alpha = 0.15f) else Color(0xFF0F172A),
+                                        shape = RoundedCornerShape(10.dp),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isSelected) AccentCyan
+                                            else if (isHighPriority) AccentAmber.copy(alpha = 0.6f)
+                                            else if (isControl) Color(0xFF334155)
+                                            else AccentGreen.copy(alpha = 0.4f)
                                         )
-                                        
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Text(
-                                            "Sector: ${target.sector} • Mag: ${target.estimatedMag} • Clasificare: ${target.knownClassification}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = TextSecondary,
-                                            fontSize = 9.sp
-                                        )
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                    Surface(
+                                                        color = if (isHighPriority) AccentAmber.copy(alpha = 0.2f)
+                                                               else if (isControl) Color(0xFF334155)
+                                                               else AccentGreen.copy(alpha = 0.2f),
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            target.advisoryPriority,
+                                                            color = if (isHighPriority) AccentAmber else if (isControl) TextSecondary else AccentGreen,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        target.name,
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) AccentCyan else Color.White
+                                                    )
+                                                }
+                                                
+                                                Button(
+                                                    onClick = {
+                                                        ticInput = target.ticId
+                                                        viewModel.runScan(target.ticId)
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = if (isSelected) AccentCyan else Color(0xFF1E293B),
+                                                        contentColor = if (isSelected) Color.Black else AccentCyan
+                                                    ),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                    modifier = Modifier.height(28.dp)
+                                                ) {
+                                                    Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                target.scientificReason,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isHighPriority) Color(0xFFFDE68A) else TextSecondary,
+                                                fontSize = 11.sp
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Text(
+                                                "Sector: ${target.sector} • Mag: ${target.estimatedMag} • Clasificare: ${target.knownClassification}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = TextSecondary,
+                                                fontSize = 9.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -458,7 +715,11 @@ fun XilonDiscoveryScreen(
                             dipSensitivity = dipSensitivity,
                             onSelectDip = { viewModel.selectDip(it) },
                             onToggleHighlight = { viewModel.toggleDipHighlight() },
-                            onRescanDips = { viewModel.runDipScan(it) }
+                            onRescanDips = { viewModel.runDipScan(it) },
+                            onScanTarget = { targetTic ->
+                                ticInput = targetTic
+                                viewModel.runScan(targetTic)
+                            }
                         )
                     }
 
@@ -927,9 +1188,10 @@ fun LightCurveVisualizerCard(
     dipSensitivity: Double = 3.5,
     onSelectDip: (DetectedDipSignal?) -> Unit = {},
     onToggleHighlight: () -> Unit = {},
-    onRescanDips: (Double) -> Unit = {}
+    onRescanDips: (Double) -> Unit = {},
+    onScanTarget: (String) -> Unit = {}
 ) {
-    var chartEngine by remember { mutableStateOf(ChartEngine.RECHARTS) }
+    var chartEngine by remember { mutableStateOf(ChartEngine.NATIVE_CANVAS) }
     var binMode by remember { mutableStateOf(BinningMode.RAW) }
 
     Card(
@@ -983,7 +1245,56 @@ fun LightCurveVisualizerCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (chartEngine == ChartEngine.RECHARTS) {
+            if (res.totalPhotonsAnalyzed == 0 || res.lightCurveSample.isEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF0B132B),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Explore,
+                            contentDescription = null,
+                            tint = AccentAmber,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            "Țintă Brută Fără Tranzite în Arhiva SPOC NASA",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "Steaua TIC ${res.star.ticId} este clasificată drept teren virgin. Telescopul spațial TESS nu a înregistrat scăderi periodice de flux (TCE), iar arhiva STScI/MAST conține 0 puncte reduse pentru această stea.",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = { onScanTarget("25155310") },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = DarkBackground)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Scanează Etalonul WASP-126 b (TIC 25155310)",
+                                color = DarkBackground,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
+            } else if (chartEngine == ChartEngine.RECHARTS) {
                 // Interactive Recharts Engine with highlighted dip regions
                 XilonDetectionRechartsView(
                     res = res,

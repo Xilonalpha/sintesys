@@ -38,7 +38,7 @@ import com.synthesis.viewmodel.ExoplanetViewModel
 fun ExoplanetScreen(
     onNavigateBack: () -> Unit,
     onViewDashboard: () -> Unit = {},
-    onViewXilonDiscovery: () -> Unit = {},
+    onViewXilonDiscovery: (String?) -> Unit = {},
     onViewDeepHunt: () -> Unit = {},
     onViewAdvancedLab: () -> Unit = {},
     onViewTerraFrontier: () -> Unit = {},
@@ -122,7 +122,7 @@ fun ExoplanetScreen(
                     colors = AssistChipDefaults.assistChipColors(containerColor = DarkSurface)
                 )
                 AssistChip(
-                    onClick = onViewXilonDiscovery,
+                    onClick = { onViewXilonDiscovery(null) },
                     label = { Text("★ Xilon", color = AccentCyan) },
                     colors = AssistChipDefaults.assistChipColors(containerColor = DarkSurface)
                 )
@@ -353,7 +353,10 @@ fun ExoplanetScreen(
                             }
 
                             items(displayed, key = { it.toiId }) { candidate ->
-                                ExoplanetCandidateCard(candidate)
+                                ExoplanetCandidateCard(
+                                    candidate = candidate,
+                                    onScanXilon = { tic -> onViewXilonDiscovery(tic) }
+                                )
                             }
 
                             if (displayed.isEmpty()) {
@@ -381,7 +384,10 @@ fun ExoplanetScreen(
 }
 
 @Composable
-fun ExoplanetCandidateCard(candidate: ExoplanetCandidate) {
+fun ExoplanetCandidateCard(
+    candidate: ExoplanetCandidate,
+    onScanXilon: (String) -> Unit = {}
+) {
     var expanded by remember { mutableStateOf(false) }
 
     Card(
@@ -421,9 +427,14 @@ fun ExoplanetCandidateCard(candidate: ExoplanetCandidate) {
             }
 
             // Badges row: Habitable Zone & ESI
-            if (candidate.isInHabitableZone || (candidate.earthSimilarityIndex ?: 0f) >= 0.70f) {
+            if (candidate.isInHabitableZone || (candidate.earthSimilarityIndex ?: 0f) >= 0.70f || candidate.catalogSource == ExoplanetCatalogSource.PURE_TIC_CATALOG) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (candidate.catalogSource == ExoplanetCatalogSource.PURE_TIC_CATALOG) {
+                        Surface(color = Color(0xFFFF1744).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                            Text("TIC PUR • 0 TOI NASA", color = Color(0xFFFF5252), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
                     if (candidate.isInHabitableZone) {
                         Surface(color = AccentCyan.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
                             Text("HABITABLE ZONE", color = AccentCyan, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
@@ -436,7 +447,7 @@ fun ExoplanetCandidateCard(candidate: ExoplanetCandidate) {
                             }
                         }
                     }
-                    if (candidate.isUnvettedCandidate) {
+                    if (candidate.isUnvettedCandidate && candidate.catalogSource != ExoplanetCatalogSource.PURE_TIC_CATALOG) {
                         Surface(color = AccentAmber.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
                             Text("UNVETTED SIGNAL", color = AccentAmber, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
@@ -469,8 +480,8 @@ fun ExoplanetCandidateCard(candidate: ExoplanetCandidate) {
                 MetricColumn("PRIORITY", "${(candidate.worthInvestigatingScore * 100).toInt()}%", AccentGreen, Modifier.weight(1f))
             }
 
-            // Expand / Collapse Action
-            Spacer(modifier = Modifier.height(6.dp))
+            // Expand / Collapse Action & Direct Scan Button
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -483,8 +494,28 @@ fun ExoplanetCandidateCard(candidate: ExoplanetCandidate) {
                     Text(if (expanded) "Hide Analysis" else "View Astrophysical Analysis", color = AccentCyan, style = MaterialTheme.typography.labelMedium)
                 }
 
-                candidate.stellarTessMagnitude?.let {
-                    Text("Host Mag: ${String.format("%.1f", it)}", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    candidate.stellarTessMagnitude?.let {
+                        Text("Mag: ${String.format("%.1f", it)}", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    }
+
+                    val rawTic = candidate.ticId.replace("TIC", "", ignoreCase = true).trim()
+                    if (rawTic.isNotBlank()) {
+                        FilledTonalButton(
+                            onClick = { onScanXilon(rawTic) },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (candidate.catalogSource == ExoplanetCatalogSource.PURE_TIC_CATALOG) Color(0xFFFF1744).copy(alpha = 0.25f) else AccentCyan.copy(alpha = 0.2f),
+                                contentColor = if (candidate.catalogSource == ExoplanetCatalogSource.PURE_TIC_CATALOG) Color(0xFFFF5252) else AccentCyan
+                            ),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("SCAN XILON", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 

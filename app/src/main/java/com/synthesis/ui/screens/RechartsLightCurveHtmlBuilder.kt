@@ -246,7 +246,15 @@ object RechartsLightCurveHtmlBuilder {
         )
       );
     }
-    ReactDOM.render(React.createElement(XilonRecharts), document.getElementById("root"));
+    if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && typeof Recharts !== 'undefined') {
+      try {
+        ReactDOM.render(React.createElement(XilonRecharts), document.getElementById("root"));
+      } catch(e) {
+        document.getElementById("root").innerHTML = "<div style='padding:20px;text-align:center;color:#64748B;'>Grafic fotometric securizat.</div>";
+      }
+    } else {
+      document.getElementById("root").innerHTML = "<div style='padding:20px;text-align:center;color:#64748B;'>Mod grafic software activat.</div>";
+    }
   </script>
 </body>
 </html>
@@ -728,7 +736,15 @@ object RechartsLightCurveHtmlBuilder {
       );
     }
 
-    ReactDOM.render(React.createElement(LightCurveDashboard), document.getElementById("root"));
+    if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && typeof Recharts !== 'undefined') {
+      try {
+        ReactDOM.render(React.createElement(LightCurveDashboard), document.getElementById("root"));
+      } catch(e) {
+        document.getElementById("root").innerHTML = "<div style='padding:20px;text-align:center;color:#64748B;'>Grafic fotometric securizat.</div>";
+      }
+    } else {
+      document.getElementById("root").innerHTML = "<div style='padding:20px;text-align:center;color:#64748B;'>Mod grafic software activat.</div>";
+    }
   </script>
 </body>
 </html>

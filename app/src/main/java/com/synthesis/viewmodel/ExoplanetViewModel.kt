@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Context
 import com.synthesis.data.repository.SynthesisRepository
+import com.synthesis.data.repository.xilon.PureTicCatalogRepository
 import com.synthesis.domain.model.ExoplanetCandidate
 import com.synthesis.domain.model.ExoplanetCatalogSource
 import com.synthesis.service.worker.AstronomicalSyncManager
@@ -15,6 +16,7 @@ import javax.inject.Inject
 
 enum class ExoplanetFilter(val title: String) {
     ALL("All Candidates"),
+    PURE_TIC("TIC fără TOI (Virgin)"),
     PHL_HABITABLE("PHL Habitable (ESI)"),
     HABITABLE_ZONE("Habitable Zone"),
     UNVETTED_NEW_WORLDS("Unvetted Discoveries"),
@@ -25,14 +27,15 @@ enum class ExoplanetFilter(val title: String) {
 }
 
 sealed interface ExoplanetUiState {
-    object Loading : ExoplanetUiState
+    data object Loading : ExoplanetUiState
     data class Success(
         val allCount: Int,
         val displayedCandidates: List<ExoplanetCandidate>,
         val unvettedCount: Int,
         val habitableCount: Int,
         val phlCount: Int = 0,
-        val cheopsCount: Int = 0
+        val cheopsCount: Int = 0,
+        val pureTicCount: Int = 0
     ) : ExoplanetUiState
     data class Error(val message: String) : ExoplanetUiState
 }
@@ -40,7 +43,8 @@ sealed interface ExoplanetUiState {
 @HiltViewModel
 class ExoplanetViewModel @Inject constructor(
     private val repository: SynthesisRepository,
-    private val astronomicalSyncManager: AstronomicalSyncManager
+    private val astronomicalSyncManager: AstronomicalSyncManager,
+    private val pureTicCatalogRepo: PureTicCatalogRepository
 ) : ViewModel() {
 
     private val _rawCandidates = MutableStateFlow<List<ExoplanetCandidate>>(emptyList())
@@ -94,20 +98,30 @@ class ExoplanetViewModel @Inject constructor(
     }
 
     private suspend fun fetchCandidatesInternal() {
+        val pureCandidates = pureTicCatalogRepo.getPureTicCatalog().map {
+            pureTicCatalogRepo.toExoplanetCandidate(it)
+        }
+
         repository.fetchAllExoplanets()
             .onSuccess { candidates ->
-                _rawCandidates.value = candidates
+                _rawCandidates.value = pureCandidates + candidates
                 applyFilters()
             }
             .onFailure { error ->
                 // If combined fails (e.g. timeout on 4 streams), fallback to TESS + Kepler individually
                 repository.fetchExoplanetCandidates()
                     .onSuccess { fallbackCandidates ->
-                        _rawCandidates.value = fallbackCandidates
+                        _rawCandidates.value = pureCandidates + fallbackCandidates
                         applyFilters()
                     }
                     .onFailure { fallbackError ->
-                        _uiState.value = ExoplanetUiState.Error(fallbackError.localizedMessage ?: "Archive query failed")
+                        // Even if remote fails, we have the pure TIC catalog!
+                        if (pureCandidates.isNotEmpty()) {
+                            _rawCandidates.value = pureCandidates
+                            applyFilters()
+                        } else {
+                            _uiState.value = ExoplanetUiState.Error(fallbackError.localizedMessage ?: "Archive query failed")
+                        }
                     }
             }
     }
@@ -129,6 +143,7 @@ class ExoplanetViewModel @Inject constructor(
 
         val filteredByTab = when (filter) {
             ExoplanetFilter.ALL -> raw
+            ExoplanetFilter.PURE_TIC -> raw.filter { it.catalogSource == ExoplanetCatalogSource.PURE_TIC_CATALOG || (!it.toiId.startsWith("TOI") && it.ticId.startsWith("TIC")) }
             ExoplanetFilter.PHL_HABITABLE -> raw.filter { it.catalogSource == ExoplanetCatalogSource.PHL_HABITABLE }
             ExoplanetFilter.HABITABLE_ZONE -> raw.filter { it.isInHabitableZone }
             ExoplanetFilter.UNVETTED_NEW_WORLDS -> raw.filter { it.isUnvettedCandidate }
@@ -152,6 +167,7 @@ class ExoplanetViewModel @Inject constructor(
         val habitableTotal = raw.count { it.isInHabitableZone }
         val phlTotal = raw.count { it.catalogSource == ExoplanetCatalogSource.PHL_HABITABLE }
         val cheopsTotal = raw.count { it.catalogSource == ExoplanetCatalogSource.CHEOPS_GAIA }
+        val pureTicTotal = raw.count { it.catalogSource == ExoplanetCatalogSource.PURE_TIC_CATALOG }
 
         _uiState.value = ExoplanetUiState.Success(
             allCount = raw.size,
@@ -159,7 +175,8 @@ class ExoplanetViewModel @Inject constructor(
             unvettedCount = unvettedTotal,
             habitableCount = habitableTotal,
             phlCount = phlTotal,
-            cheopsCount = cheopsTotal
+            cheopsCount = cheopsTotal,
+            pureTicCount = pureTicTotal
         )
     }
 }
