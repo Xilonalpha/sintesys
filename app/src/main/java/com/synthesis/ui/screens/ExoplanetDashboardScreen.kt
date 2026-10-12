@@ -242,11 +242,11 @@ fun AnomalyCandidateItem(candidate: ExoplanetCandidate) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricColumn("PERIOD", "${String.format("%.2f", candidate.orbitalPeriodDays ?: 0.0)} d", AccentAmber)
-                MetricColumn("MASS (est)", "${String.format("%.1f", candidate.planetMassEarth ?: 0.0)} M⊕", AccentCyan)
-                MetricColumn("RADIUS", "${String.format("%.2f", candidate.planetRadiusEarth ?: 0.0)} R⊕", AccentGreen)
-                MetricColumn("TEMP", "${candidate.equilibriumTempK?.toInt() ?: 0} K", TextPrimary)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricColumn("PERIOD", "${String.format("%.2f", candidate.orbitalPeriodDays ?: 0.0)} d", AccentAmber, Modifier.weight(1f))
+                MetricColumn("MASS (est)", "${String.format("%.1f", candidate.planetMassEarth ?: 0.0)} M⊕", AccentCyan, Modifier.weight(1f))
+                MetricColumn("RADIUS", "${String.format("%.2f", candidate.planetRadiusEarth ?: 0.0)} R⊕", AccentGreen, Modifier.weight(1f))
+                MetricColumn("TEMP", "${candidate.equilibriumTempK?.toInt() ?: 0} K", TextPrimary, Modifier.weight(1f))
             }
 
             if (candidate.scoreReasoning.isNotEmpty()) {

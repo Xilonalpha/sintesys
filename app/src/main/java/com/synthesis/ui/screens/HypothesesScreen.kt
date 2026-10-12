@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -12,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.Hypothesis
 import com.synthesis.domain.model.HypothesisStatus
@@ -67,10 +69,10 @@ fun HypothesisDetailCard(hypothesis: Hypothesis) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(hypothesis.description, color = TextSecondary, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                StatBox("Evidence", hypothesis.evidenceCount.toString(), AccentCyan)
-                StatBox("Contradictions", hypothesis.contradictionCount.toString(), AccentRed)
-                StatBox("Confidence", "${hypothesis.confidence.toInt()}%", AccentGreen)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatBox("Evidence", hypothesis.evidenceCount.toString(), AccentCyan, Modifier.weight(1f))
+                StatBox("Contradictions", hypothesis.contradictionCount.toString(), AccentRed, Modifier.weight(1f))
+                StatBox("Confidence", "${hypothesis.confidence.toInt()}%", AccentGreen, Modifier.weight(1f))
             }
             if (hypothesis.discriminatingTests.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -102,9 +104,39 @@ fun StatusChip(status: HypothesisStatus) {
 }
 
 @Composable
-fun StatBox(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = color, style = MaterialTheme.typography.headlineLarge)
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelLarge)
+fun StatBox(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF0F172A),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                value,
+                color = color,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                label,
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
 }

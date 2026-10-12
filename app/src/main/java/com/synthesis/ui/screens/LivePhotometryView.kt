@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -316,18 +317,18 @@ fun LivePhotometryView(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        PhotometryMetricItem("Adâncime Tranzit (δ)", "${session.measuredDepthPpm.roundToInt()} ppm", highlightColor = AccentGreen)
-                        PhotometryMetricItem("Scădere Magnitudine", String.format("%.4f mag", session.measuredDepthPpm / 1_000_000.0 * 1.0857), highlightColor = AccentAmber)
-                        PhotometryMetricItem("Rază Planetară", String.format("%.2f R⊕", session.measuredRadiusEarth), highlightColor = AccentCyan)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PhotometryMetricItem("Adâncime (δ)", "${session.measuredDepthPpm.roundToInt()} ppm", highlightColor = AccentGreen, modifier = Modifier.weight(1f))
+                        PhotometryMetricItem("Scădere Mag", String.format("%.4f mag", session.measuredDepthPpm / 1_000_000.0 * 1.0857), highlightColor = AccentAmber, modifier = Modifier.weight(1f))
+                        PhotometryMetricItem("Rază Planetă", String.format("%.2f R⊕", session.measuredRadiusEarth), highlightColor = AccentCyan, modifier = Modifier.weight(1f))
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        PhotometryMetricItem("T0 Mid-Transit (BJD)", String.format("%.4f", session.calculatedMidTransitBjd))
-                        PhotometryMetricItem("Durată Tranzit", "${session.expectedDurationMinutes.roundToInt()} min")
-                        PhotometryMetricItem("Calitate Fit (χ²/dof)", String.format("%.2f", session.chiSquaredPerDof))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PhotometryMetricItem("T0 Mid-Transit", String.format("%.4f", session.calculatedMidTransitBjd), modifier = Modifier.weight(1f))
+                        PhotometryMetricItem("Durată Tranzit", "${session.expectedDurationMinutes.roundToInt()} min", modifier = Modifier.weight(1f))
+                        PhotometryMetricItem("Calitate Fit", String.format("%.2f", session.chiSquaredPerDof), modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -698,11 +699,19 @@ private fun RealObserverConfigDialog(
 private fun PhotometryMetricItem(
     label: String,
     value: String,
-    highlightColor: Color = Color.White
+    highlightColor: Color = Color.White,
+    modifier: Modifier = Modifier
 ) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(value, style = MaterialTheme.typography.titleSmall, color = highlightColor, fontWeight = FontWeight.SemiBold)
+    Surface(
+        color = Color(0xFF030712),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(value, style = MaterialTheme.typography.titleSmall, color = highlightColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+        }
     }
 }

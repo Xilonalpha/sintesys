@@ -447,26 +447,26 @@ fun ExoplanetCandidateCard(candidate: ExoplanetCandidate) {
             Spacer(modifier = Modifier.height(10.dp))
 
             // Metrics Grid
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 candidate.planetRadiusEarth?.let {
-                    MetricColumn("RADIUS", "${String.format("%.2f", it)} R⊕", AccentCyan)
+                    MetricColumn("RADIUS", "${String.format("%.2f", it)} R⊕", AccentCyan, Modifier.weight(1f))
                 } ?: run {
                     val estimatedR = candidate.transitDepthPpm?.let { depth ->
                         val est = 109.2 * kotlin.math.sqrt(depth / 1_000_000.0)
                         if (est in 0.3..35.0) String.format("~%.1f R⊕*", est) else null
                     }
-                    MetricColumn("RADIUS", estimatedR ?: "~ În analiză", AccentAmber)
+                    MetricColumn("RADIUS", estimatedR ?: "~ În analiză", AccentAmber, Modifier.weight(1f))
                 }
 
                 candidate.orbitalPeriodDays?.let {
-                    MetricColumn("PERIOD", "${String.format("%.1f", it)} d", AccentAmber)
-                } ?: MetricColumn("PERIOD", "N/A", TextSecondary)
+                    MetricColumn("PERIOD", "${String.format("%.1f", it)} d", AccentAmber, Modifier.weight(1f))
+                } ?: MetricColumn("PERIOD", "N/A", TextSecondary, Modifier.weight(1f))
 
                 candidate.equilibriumTempK?.let {
-                    MetricColumn("TEMP", "${it.toInt()} K", if (candidate.isInHabitableZone) AccentCyan else TextPrimary)
-                } ?: MetricColumn("TEMP", "N/A", TextSecondary)
+                    MetricColumn("TEMP", "${it.toInt()} K", if (candidate.isInHabitableZone) AccentCyan else TextPrimary, Modifier.weight(1f))
+                } ?: MetricColumn("TEMP", "N/A", TextSecondary, Modifier.weight(1f))
 
-                MetricColumn("PRIORITY", "${(candidate.worthInvestigatingScore * 100).toInt()}%", AccentGreen)
+                MetricColumn("PRIORITY", "${(candidate.worthInvestigatingScore * 100).toInt()}%", AccentGreen, Modifier.weight(1f))
             }
 
             // Expand / Collapse Action

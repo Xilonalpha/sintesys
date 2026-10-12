@@ -282,18 +282,18 @@ private fun MonoTransitsView(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MetricItem("Transit Duration", "${String.format("%.1f", candidate.transitDurationHours)} h")
-                        MetricItem("Transit Depth", "${candidate.transitDepthPpm.roundToInt()} ppm")
-                        MetricItem("Derived Radius", "${String.format("%.2f", candidate.planetRadiusEarth)} R⊕")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricItem("Transit Duration", "${String.format("%.1f", candidate.transitDurationHours)} h", modifier = Modifier.weight(1f))
+                        MetricItem("Transit Depth", "${candidate.transitDepthPpm.roundToInt()} ppm", modifier = Modifier.weight(1f))
+                        MetricItem("Derived Radius", "${String.format("%.2f", candidate.planetRadiusEarth)} R⊕", modifier = Modifier.weight(1f))
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MetricItem("Estimated Period", "~${candidate.circularEstimatedPeriodDays.roundToInt()} days", highlightColor = AccentCyan)
-                        MetricItem("Semi-Major Axis", "${String.format("%.3f", candidate.semiMajorAxisAu)} AU")
-                        MetricItem("Equilibrium Temp", "${candidate.equilibriumTempK.roundToInt()} K")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricItem("Estimated Period", "~${candidate.circularEstimatedPeriodDays.roundToInt()} d", highlightColor = AccentCyan, modifier = Modifier.weight(1f))
+                        MetricItem("Semi-Major Axis", "${String.format("%.3f", candidate.semiMajorAxisAu)} AU", modifier = Modifier.weight(1f))
+                        MetricItem("Equilibrium Temp", "${candidate.equilibriumTempK.roundToInt()} K", modifier = Modifier.weight(1f))
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -393,18 +393,18 @@ private fun TtvInversionView(systems: List<TtvCompanionAnalysis>) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MetricItem("TTV Amplitude", "±${String.format("%.1f", sys.ttvAmplitudeMinutes)} min", highlightColor = AccentAmber)
-                        MetricItem("Super-Period", "${sys.superPeriodDays.roundToInt()} days")
-                        MetricItem("Detection Confidence", "${String.format("%.1f", sys.confidenceSigma)}σ", highlightColor = AccentGreen)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricItem("TTV Amplitude", "±${String.format("%.1f", sys.ttvAmplitudeMinutes)} min", highlightColor = AccentAmber, modifier = Modifier.weight(1f))
+                        MetricItem("Super-Period", "${sys.superPeriodDays.roundToInt()} d", modifier = Modifier.weight(1f))
+                        MetricItem("Confidence", "${String.format("%.1f", sys.confidenceSigma)}σ", highlightColor = AccentGreen, modifier = Modifier.weight(1f))
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MetricItem("Companion Mass", "~${String.format("%.1f", sys.estimatedCompanionMassEarth)} M⊕", highlightColor = AccentCyan)
-                        MetricItem("Companion Period", "${String.format("%.2f", sys.estimatedCompanionPeriodDays)} d")
-                        MetricItem("Companion Teq", "${sys.companionEquilibriumTempK.roundToInt()} K")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricItem("Companion Mass", "~${String.format("%.1f", sys.estimatedCompanionMassEarth)} M⊕", highlightColor = AccentCyan, modifier = Modifier.weight(1f))
+                        MetricItem("Period", "${String.format("%.2f", sys.estimatedCompanionPeriodDays)} d", modifier = Modifier.weight(1f))
+                        MetricItem("Teq", "${sys.companionEquilibriumTempK.roundToInt()} K", modifier = Modifier.weight(1f))
                     }
 
                     if (sys.companionHabitableZone) {
@@ -499,10 +499,10 @@ private fun AtmosphericTsmView(scores: List<AtmosphericCharacterizationScore>) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MetricItem("Planet Radius", "${String.format("%.2f", s.planetRadiusEarth)} R⊕")
-                        MetricItem("Scale Height (H)", "${s.atmosphericScaleHeightKm.roundToInt()} km", highlightColor = AccentCyan)
-                        MetricItem("Feature Depth", "${s.transitFeatureAmplitudePpm.roundToInt()} ppm")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricItem("Planet Radius", "${String.format("%.2f", s.planetRadiusEarth)} R⊕", modifier = Modifier.weight(1f))
+                        MetricItem("Scale Height (H)", "${s.atmosphericScaleHeightKm.roundToInt()} km", highlightColor = AccentCyan, modifier = Modifier.weight(1f))
+                        MetricItem("Feature Depth", "${s.transitFeatureAmplitudePpm.roundToInt()} ppm", modifier = Modifier.weight(1f))
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -578,10 +578,10 @@ private fun NeglectedJewelsView(jewels: List<NeglectedJewelTarget>) {
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MetricItem("Signal-to-Noise", "${j.snr}σ", highlightColor = AccentGreen)
-                        MetricItem("Period", "${String.format("%.2f", j.periodDays)} d")
-                        MetricItem("Radius", "${String.format("%.2f", j.planetRadiusEarth)} R⊕")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricItem("SNR", "${j.snr}σ", highlightColor = AccentGreen, modifier = Modifier.weight(1f))
+                        MetricItem("Period", "${String.format("%.2f", j.periodDays)} d", modifier = Modifier.weight(1f))
+                        MetricItem("Radius", "${String.format("%.2f", j.planetRadiusEarth)} R⊕", modifier = Modifier.weight(1f))
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -595,10 +595,41 @@ private fun NeglectedJewelsView(jewels: List<NeglectedJewelTarget>) {
 }
 
 @Composable
-private fun MetricItem(label: String, value: String, highlightColor: Color = Color.White) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = highlightColor)
+private fun MetricItem(
+    label: String,
+    value: String,
+    highlightColor: Color = Color.White,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF0A0F1D),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = highlightColor,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

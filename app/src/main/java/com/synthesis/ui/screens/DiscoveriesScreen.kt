@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -11,7 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.Discovery
 import com.synthesis.domain.model.DiscoveryType
@@ -86,10 +89,10 @@ fun DiscoveryCard(discovery: Discovery) {
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                MetricColumn("NOVELTY", "${(discovery.noveltyScore * 100).toInt()}%", AccentCyan)
-                MetricColumn("CONFIDENCE", "${(discovery.confidenceScore * 100).toInt()}%", AccentAmber)
-                MetricColumn("IMPACT", "${(discovery.impactScore * 100).toInt()}%", AccentGreen)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricColumn("NOVELTY", "${(discovery.noveltyScore * 100).toInt()}%", AccentCyan, Modifier.weight(1f))
+                MetricColumn("CONFIDENCE", "${(discovery.confidenceScore * 100).toInt()}%", AccentAmber, Modifier.weight(1f))
+                MetricColumn("IMPACT", "${(discovery.impactScore * 100).toInt()}%", AccentGreen, Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -148,9 +151,39 @@ fun DiscoveryScoreBadge(patentabilityScore: Float) {
 }
 
 @Composable
-fun MetricColumn(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = color, style = MaterialTheme.typography.titleLarge)
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+fun MetricColumn(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF030712),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                value,
+                color = color,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                label,
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
 }

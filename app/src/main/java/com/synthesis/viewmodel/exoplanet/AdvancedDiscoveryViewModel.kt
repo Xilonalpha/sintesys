@@ -11,12 +11,14 @@ import com.synthesis.engine.exoplanet.RomanMicrolensingEngine
 import com.synthesis.service.*
 import com.synthesis.service.worker.MastBatchWorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -422,12 +424,14 @@ class AdvancedDiscoveryViewModel @Inject constructor(
      * Shares the formatted FITS PDF report via Android share sheet.
      */
     fun shareFitsSummaryPdf(context: android.content.Context, customHeader: FitsHeader? = null) {
-        val file = _exportedPdfFile.value ?: exportFitsSummaryPdf(context, customHeader)
-        if (file != null && file.exists()) {
-            val shareIntent = fitsPdfReportGenerator.createShareIntent(context, file)
-            val chooser = android.content.Intent.createChooser(shareIntent, "Partajează Raport FITS PDF")
-            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(chooser)
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = _exportedPdfFile.value ?: exportFitsSummaryPdf(context, customHeader)
+            if (file != null && file.exists()) {
+                val shareIntent = fitsPdfReportGenerator.createShareIntent(context, file)
+                val chooser = android.content.Intent.createChooser(shareIntent, "Partajează Raport FITS PDF")
+                chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(chooser)
+            }
         }
     }
 
@@ -435,14 +439,16 @@ class AdvancedDiscoveryViewModel @Inject constructor(
      * Opens the formatted FITS PDF report in an external viewer.
      */
     fun openFitsSummaryPdf(context: android.content.Context, customHeader: FitsHeader? = null) {
-        val file = _exportedPdfFile.value ?: exportFitsSummaryPdf(context, customHeader)
-        if (file != null && file.exists()) {
-            try {
-                val viewIntent = fitsPdfReportGenerator.createViewIntent(context, file)
-                viewIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(viewIntent)
-            } catch (e: Exception) {
-                shareFitsSummaryPdf(context, customHeader)
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = _exportedPdfFile.value ?: exportFitsSummaryPdf(context, customHeader)
+            if (file != null && file.exists()) {
+                try {
+                    val viewIntent = fitsPdfReportGenerator.createViewIntent(context, file)
+                    viewIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(viewIntent)
+                } catch (e: Exception) {
+                    shareFitsSummaryPdf(context, customHeader)
+                }
             }
         }
     }
@@ -544,7 +550,7 @@ class AdvancedDiscoveryViewModel @Inject constructor(
 
     // Physical Telescope Mount Actions
     fun connectMountSim() = telescopeMotorControlService.connectSimulation()
-    fun connectMountUsb() = telescopeMotorControlService.connectUsbOtg()
+    fun connectMountUsb(): UsbConnectResult = telescopeMotorControlService.connectUsbOtg()
     fun connectMountWifi(ip: String, port: Int) = telescopeMotorControlService.connectWifi(ip, port)
     fun disconnectMount() = telescopeMotorControlService.disconnect()
     fun slewMountToTarget(target: LiveTransitTarget) =
@@ -607,44 +613,46 @@ class AdvancedDiscoveryViewModel @Inject constructor(
      * light curves (NASA TESS, Kepler, CHEOPS).
      */
     fun ingestTelescopeFitsBytes(bytes: ByteArray) {
-        try {
-            val doc = fitsReaderService.read(bytes)
-            val extractedLightCurve = doc.extractLightCurve()
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val doc = fitsReaderService.read(bytes)
+                val extractedLightCurve = doc.extractLightCurve()
 
-            if (extractedLightCurve != null && extractedLightCurve.size >= 5) {
-                // Table Light Curve Mode (NASA Kepler / TESS)
-                val targetObj = doc.header.targetObject ?: doc.header.getString("OBJECT", "Sursă FITS Kepler/TESS")
-                val telescopeName = doc.header.telescope ?: doc.header.getString("TELESCOP", "Observator Spațial")
+                if (extractedLightCurve != null && extractedLightCurve.size >= 5) {
+                    // Table Light Curve Mode (NASA Kepler / TESS)
+                    val targetObj = doc.header.targetObject ?: doc.header.getString("OBJECT", "Sursă FITS Kepler/TESS")
+                    val telescopeName = doc.header.telescope ?: doc.header.getString("TELESCOP", "Observator Spațial")
 
-                _liveSession.value = _liveSession.value.copy(
-                    candidateName = targetObj,
-                    hostStar = "$targetObj ($telescopeName)",
-                    dataPoints = extractedLightCurve,
-                    isRealImportedData = true,
-                    dataSourceTag = "NASA FITS BINTABLE ($telescopeName)",
-                    currentPhase = "Date Fotometrice FITS Ingerate (100% Date Reale)",
-                    isObserving = false
-                )
+                    _liveSession.value = _liveSession.value.copy(
+                        candidateName = targetObj,
+                        hostStar = "$targetObj ($telescopeName)",
+                        dataPoints = extractedLightCurve,
+                        isRealImportedData = true,
+                        dataSourceTag = "NASA FITS BINTABLE ($telescopeName)",
+                        currentPhase = "Date Fotometrice FITS Ingerate (100% Date Reale)",
+                        isObserving = false
+                    )
 
-                // Run periodic BLS transit scan
-                val blsRes = periodicTransitAnalysisEngine.analyzeDataPoints(extractedLightCurve)
-                _periodicTransitResult.value = blsRes
+                    // Run periodic BLS transit scan
+                    val blsRes = periodicTransitAnalysisEngine.analyzeDataPoints(extractedLightCurve)
+                    _periodicTransitResult.value = blsRes
 
-                // Run matching against Stellar Template Library
-                runStellarTemplateFit(extractedLightCurve, blsRes.bestPeriodDays)
+                    // Run matching against Stellar Template Library
+                    runStellarTemplateFit(extractedLightCurve, blsRes.bestPeriodDays)
 
-                _alertSuccessMessage.value = "Fișier FITS BINTABLE ($targetObj): s-au extras cu succes ${extractedLightCurve.size} puncte fotometrice reale!"
-            } else {
-                // 2D CCD/CMOS Image Frame Mode: Process through synthetic aperture vision engine
-                telescopeCameraVisionService.ingestFitsFrame(bytes)
-                val currentPts = _liveSession.value.dataPoints
-                if (currentPts.isNotEmpty()) {
-                    runStellarTemplateFit(currentPts, _periodicTransitResult.value?.bestPeriodDays)
+                    _alertSuccessMessage.value = "Fișier FITS BINTABLE ($targetObj): s-au extras cu succes ${extractedLightCurve.size} puncte fotometrice reale!"
+                } else {
+                    // 2D CCD/CMOS Image Frame Mode: Process through synthetic aperture vision engine
+                    telescopeCameraVisionService.ingestFitsFrame(bytes)
+                    val currentPts = _liveSession.value.dataPoints
+                    if (currentPts.isNotEmpty()) {
+                        runStellarTemplateFit(currentPts, _periodicTransitResult.value?.bestPeriodDays)
+                    }
                 }
+            } catch (e: Exception) {
+                // Fallback to vision service
+                telescopeCameraVisionService.ingestFitsFrame(bytes)
             }
-        } catch (e: Exception) {
-            // Fallback to vision service
-            telescopeCameraVisionService.ingestFitsFrame(bytes)
         }
     }
 
@@ -814,37 +822,41 @@ class AdvancedDiscoveryViewModel @Inject constructor(
     }
 
     fun ingestFitsSeries(files: List<ByteArray>, cadenceMinutes: Double = 5.0, hostStarRadius: Double = 1.0) {
-        val res = telescopeCameraVisionService.ingestFitsSeries(files, cadenceMinutes, hostStarRadius)
-        if (res != null) {
-            _periodicTransitResult.value = res
-            _alertSuccessMessage.value = "Seria de cadre FITS a fost procesată. ${res.statusSummary}"
+        viewModelScope.launch(Dispatchers.Default) {
+            val res = telescopeCameraVisionService.ingestFitsSeries(files, cadenceMinutes, hostStarRadius)
+            if (res != null) {
+                _periodicTransitResult.value = res
+                _alertSuccessMessage.value = "Seria de cadre FITS a fost procesată. ${res.statusSummary}"
+            }
         }
     }
 
     /**
      * Dynamically adjusts the Signal-to-Noise Ratio (SNR) threshold and re-filters the FITS
-     * raw pixel buffer in real-time, allowing users to suppress seeing turbulence interactively.
+     * raw pixel buffer in real-time asynchronously on a background dispatcher, ensuring no UI stutter or ANR.
      */
     fun updateSnrFilterThreshold(threshold: Float) {
-        telescopeCameraVisionService.updateSnrFilterThreshold(threshold)
+        viewModelScope.launch(Dispatchers.Default) {
+            telescopeCameraVisionService.updateSnrFilterThreshold(threshold)
 
-        // If current live session has real imported points, adjust noise scatter modeling accordingly
-        val currentPoints = _liveSession.value.dataPoints
-        if (currentPoints.isNotEmpty() && _liveSession.value.isRealImportedData) {
-            val factor = (3.0f / threshold.coerceIn(1.0f, 15.0f)).toDouble()
-            // When SNR threshold increases, atmospheric noise scatter decreases
-            val smoothed = currentPoints.map { pt ->
-                val baseline = 1.0000 - ((1.0000 - pt.relativeFlux).coerceAtLeast(0.0))
-                val scatter = (pt.relativeFlux - baseline) * factor
-                pt.copy(
-                    relativeFlux = baseline + scatter,
-                    fluxError = (pt.fluxError * factor).coerceAtLeast(0.0003)
+            // If current live session has real imported points, adjust noise scatter modeling accordingly
+            val currentPoints = _liveSession.value.dataPoints
+            if (currentPoints.isNotEmpty() && _liveSession.value.isRealImportedData) {
+                val factor = (3.0f / threshold.coerceIn(1.0f, 15.0f)).toDouble()
+                // When SNR threshold increases, atmospheric noise scatter decreases
+                val smoothed = currentPoints.map { pt ->
+                    val baseline = 1.0000 - ((1.0000 - pt.relativeFlux).coerceAtLeast(0.0))
+                    val scatter = (pt.relativeFlux - baseline) * factor
+                    pt.copy(
+                        relativeFlux = baseline + scatter,
+                        fluxError = (pt.fluxError * factor).coerceAtLeast(0.0003)
+                    )
+                }
+                _liveSession.value = _liveSession.value.copy(
+                    dataPoints = smoothed,
+                    signalToNoiseRatio = (_liveSession.value.signalToNoiseRatio * (1.0 / factor)).coerceIn(4.0, 99.0)
                 )
             }
-            _liveSession.value = _liveSession.value.copy(
-                dataPoints = smoothed,
-                signalToNoiseRatio = (_liveSession.value.signalToNoiseRatio * (1.0 / factor)).coerceIn(4.0, 99.0)
-            )
         }
     }
 

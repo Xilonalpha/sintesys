@@ -1,9 +1,11 @@
 package com.synthesis.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -99,19 +101,19 @@ fun JwstTransmissionSpectroscopyView(
                             .fillMaxWidth()
                             .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                             .padding(10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Înălțime de Scară H", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Înălțime Scară H", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.scaleHeightKm)} km", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Metrică Emisie ESM", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Metrică ESM", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.emissionSpectroscopyMetric)}", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Fotochimie UV", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                            Text(if (result.photochemistryDetected) "SO2 DETECTAT (4.05µm)" else "NEDETECTAT", color = if (result.photochemistryDetected) AccentAmber else TextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Fotochimie UV", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
+                            Text(if (result.photochemistryDetected) "SO2 Detectat" else "Nedetectat", color = if (result.photochemistryDetected) AccentAmber else TextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
 
@@ -120,7 +122,9 @@ fun JwstTransmissionSpectroscopyView(
                     Text("Gaze Detectate în Spectru:", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         result.detectedAbsorptionFeatures.forEach { mol ->

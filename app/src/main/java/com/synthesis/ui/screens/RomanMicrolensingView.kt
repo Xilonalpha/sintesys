@@ -183,17 +183,17 @@ fun RomanMicrolensingView(
                     Text("Rezultate Inversie Matematică Roman / Paczyński:", color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        ParameterColumn("MASĂ ESTIMATĂ", "${String.format("%.2f", inversionResult.inferredMassEarth)} M⊕", AccentGreen)
-                        ParameterColumn("ECHIV. JUPITER", "${String.format("%.3f", inversionResult.inferredMassJupiter)} M_J", AccentCyan)
-                        ParameterColumn("RAZĂ EINSTEIN θ_E", "${String.format("%.2f", inversionResult.einsteinRadiusMas)} mas", AccentAmber)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ParameterColumn("MASĂ ESTIMATĂ", "${String.format("%.2f", inversionResult.inferredMassEarth)} M⊕", AccentGreen, Modifier.weight(1f))
+                        ParameterColumn("ECHIV. JUPITER", "${String.format("%.3f", inversionResult.inferredMassJupiter)} M_J", AccentCyan, Modifier.weight(1f))
+                        ParameterColumn("RAZĂ EINSTEIN", "${String.format("%.2f", inversionResult.einsteinRadiusMas)} mas", AccentAmber, Modifier.weight(1f))
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        ParameterColumn("TIMP TRAVERSARE t_E", "${String.format("%.1f", inversionResult.crossingDurationHours)} ore", AccentPurple)
-                        ParameterColumn("MIȘCARE PROPRIE μ", "${String.format("%.1f", inversionResult.properMotionMasYr)} mas/an", TextPrimary)
-                        ParameterColumn("TIP LENTILĂ", if (inversionResult.isFreeFloating) "Planetă Orfană" else "Sistem Binar", AccentMagenta)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ParameterColumn("TRAVERSARE t_E", "${String.format("%.1f", inversionResult.crossingDurationHours)} ore", AccentPurple, Modifier.weight(1f))
+                        ParameterColumn("MIȘCARE PROPRIE", "${String.format("%.1f", inversionResult.properMotionMasYr)} mas/an", TextPrimary, Modifier.weight(1f))
+                        ParameterColumn("TIP LENTILĂ", if (inversionResult.isFreeFloating) "Planetă Orfană" else "Sistem Binar", AccentMagenta, Modifier.weight(1f))
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -274,9 +274,22 @@ fun MicrolensingLightCurveCanvas(
 }
 
 @Composable
-private fun ParameterColumn(label: String, value: String, color: Color) {
-    Column {
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
-        Text(value, color = color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+private fun ParameterColumn(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF030712),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, maxLines = 1)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(value, color = color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+        }
     }
 }

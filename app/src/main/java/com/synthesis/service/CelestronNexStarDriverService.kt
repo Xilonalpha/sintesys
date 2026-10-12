@@ -93,6 +93,7 @@ class CelestronNexStarDriverService @Inject constructor(
     companion object {
         const val USB_NOTIFICATION_CHANNEL_ID = "synthesis_telescope_hardware_channel"
         const val USB_DISCONNECT_NOTIFICATION_ID = 4203
+        const val ACTION_USB_PERMISSION = "com.synthesis.USB_PERMISSION"
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -113,20 +114,30 @@ class CelestronNexStarDriverService @Inject constructor(
 
     private val usbReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            if (intent?.action == UsbManager.ACTION_USB_DEVICE_DETACHED) {
-                if (_telemetry.value.connectionMode == NexStarConnectionMode.USB_SERIAL || usbConnection != null || _telemetry.value.isConnected) {
-                    // 1. Cancel pending slew jobs immediately
-                    slewJob?.cancel()
-
-                    // 2. Disconnect and update isConnected = false
-                    disconnect()
-
-                    // 3. Log alert
-                    val alertMessage = "ALERTA HARDWARE: Cablul USB NexStar+ a fost deconectat fizic din dispozitiv! Motoarele au fost oprite."
-                    addLog(alertMessage)
-
-                    // 4. Trigger user-facing notification
-                    triggerUsbDetachedNotification()
+            val action = intent?.action ?: return
+            when (action) {
+                ACTION_USB_PERMISSION -> {
+                    val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    if (granted && device != null) {
+                        addLog("✓ Permisiune USB aprobată pentru ${device.deviceName}! Conectare NexStar+...")
+                        connectUsbOtg()
+                    }
+                }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    if (_telemetry.value.connectionMode == NexStarConnectionMode.USB_SERIAL || usbConnection != null || _telemetry.value.isConnected) {
+                        pollingJob?.cancel()
+                        slewJob?.cancel()
+                        disconnect()
+                        val alertMessage = "ALERTA HARDWARE: Cablul USB NexStar+ a fost deconectat fizic din dispozitiv! Motoarele au fost oprite."
+                        addLog(alertMessage)
+                        triggerUsbDetachedNotification()
+                    }
                 }
             }
         }
@@ -135,9 +146,13 @@ class CelestronNexStarDriverService @Inject constructor(
     init {
         createNotificationChannel()
         try {
-            val filter = android.content.IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            val filter = android.content.IntentFilter().apply {
+                addAction(ACTION_USB_PERMISSION)
+                addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+                addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(usbReceiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 context.registerReceiver(usbReceiver, filter)
             }
@@ -248,11 +263,16 @@ class CelestronNexStarDriverService @Inject constructor(
         if (!usbManager.hasPermission(device)) {
             addLog("Solicitare permisiune USB Android pentru ${device.deviceName} (VID: 0x${Integer.toHexString(device.vendorId)}). Apasă 'Permite' pe ecran!")
             try {
+                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
                 val permissionIntent = PendingIntent.getBroadcast(
                     context,
                     0,
-                    Intent("com.synthesis.USB_PERMISSION"),
-                    PendingIntent.FLAG_IMMUTABLE
+                    Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
+                    flags
                 )
                 usbManager.requestPermission(device, permissionIntent)
             } catch (e: Exception) {
@@ -717,9 +737,33 @@ class CelestronNexStarDriverService @Inject constructor(
                 connection.controlTransfer(0x40, 0x9A, 0x2518, 0x0050, null, 0, 500)
                 "WCH CH340/CH341"
             }
-            0x067B -> { // Prolific PL2303
-                val lineCoding = byteArrayOf(0x80.toByte(), 0x25.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00, 0x00, 0x08)
-                connection.controlTransfer(0x21, 0x20, 0, 0, lineCoding, 7, 500)
+            0x067B -> { // Prolific PL2303 (PL2303H/HX/HXD/RA/EA/TA/TB/G)
+                try {
+                    val buf = ByteArray(1)
+                    connection.controlTransfer(0xC0, 0x01, 0x8484, 0, buf, 1, 500)
+                    connection.controlTransfer(0x40, 0x01, 0x0404, 0, null, 0, 500)
+                    connection.controlTransfer(0xC0, 0x01, 0x8484, 0, buf, 1, 500)
+                    connection.controlTransfer(0xC0, 0x01, 0x8383, 0, buf, 1, 500)
+                    connection.controlTransfer(0xC0, 0x01, 0x8484, 0, buf, 1, 500)
+                    connection.controlTransfer(0x40, 0x01, 0x0404, 1, null, 0, 500)
+                    connection.controlTransfer(0xC0, 0x01, 0x8484, 0, buf, 1, 500)
+                    connection.controlTransfer(0xC0, 0x01, 0x8383, 0, buf, 1, 500)
+                    connection.controlTransfer(0x40, 0x01, 0, 1, null, 0, 500)
+                    connection.controlTransfer(0x40, 0x01, 1, 0, null, 0, 500)
+                    connection.controlTransfer(0x40, 0x01, 2, 0x44, null, 0, 500)
+
+                    val lineCoding = byteArrayOf(
+                        0x80.toByte(), 0x25.toByte(), 0x00.toByte(), 0x00.toByte(),
+                        0x00.toByte(), 0x00.toByte(), 0x08.toByte()
+                    )
+                    connection.controlTransfer(0x21, 0x20, 0, 0, lineCoding, 7, 500)
+
+                    // Assert DTR (0x01) and RTS (0x02) -> 0x0003
+                    connection.controlTransfer(0x21, 0x22, 0x0003, 0, null, 0, 500)
+                    connection.controlTransfer(0x40, 0x01, 0, 0, null, 0, 500)
+                } catch (e: Exception) {
+                    addLog("Avertisment init PL2303: ${e.message}")
+                }
                 "Prolific PL2303 (Celestron Cable)"
             }
             else -> "NexStar USB CDC Interface (VID: 0x${Integer.toHexString(vendorId)})"

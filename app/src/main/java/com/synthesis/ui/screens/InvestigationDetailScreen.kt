@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.*
 import com.synthesis.ui.theme.*
@@ -130,7 +131,10 @@ fun SourceStatusRow(source: DataSource) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(
                     when (source.status) {
@@ -142,12 +146,20 @@ fun SourceStatusRow(source: DataSource) {
                 )
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(source.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                source.name,
+                color = TextPrimary,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             "${source.status.name} | ${source.apiLatency}ms | Q:${(source.dataQuality * 100).toInt()}%",
             color = TextSecondary,
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 11.sp
         )
     }
 }

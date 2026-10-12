@@ -15,6 +15,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.*
 import com.synthesis.ui.theme.*
@@ -62,7 +63,18 @@ fun EvidenceGraphScreen(
                 val centerX = size.width / 2
                 val centerY = size.height / 2
                 drawCircle(color = AccentCyan, radius = 40f * scale, center = Offset(centerX, centerY))
-                drawText(textMeasurer = textMeasurer, text = "PHENOMENON", topLeft = Offset(centerX - 50f, centerY - 8f))
+                val phenomenonStyle = androidx.compose.ui.text.TextStyle(
+                    color = Color.Black,
+                    fontSize = (10 * scale).coerceIn(8f, 14f).sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
+                val pMeasured = textMeasurer.measure("PHENOMENON", phenomenonStyle)
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = "PHENOMENON",
+                    topLeft = Offset(centerX - pMeasured.size.width / 2f, centerY - pMeasured.size.height / 2f),
+                    style = phenomenonStyle
+                )
 
                 nodes.forEach { node ->
                     val nodeX = centerX + (node.x - 400) * scale + offset.x
@@ -82,7 +94,18 @@ fun EvidenceGraphScreen(
                         else -> TextSecondary
                     }
                     drawCircle(color = nodeColor, radius = 25f * scale, center = Offset(nodeX, nodeY))
-                    drawText(textMeasurer = textMeasurer, text = node.label, topLeft = Offset(nodeX - 30f, nodeY + 30f * scale))
+                    val nodeTextStyle = androidx.compose.ui.text.TextStyle(
+                        color = Color.White,
+                        fontSize = (11 * scale).coerceIn(9f, 15f).sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                    val nodeMeasured = textMeasurer.measure(node.label, nodeTextStyle)
+                    drawText(
+                        textMeasurer = textMeasurer,
+                        text = node.label,
+                        topLeft = Offset(nodeX - nodeMeasured.size.width / 2f, nodeY + 28f * scale),
+                        style = nodeTextStyle
+                    )
                 }
             }
             Column(

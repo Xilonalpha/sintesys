@@ -94,18 +94,18 @@ fun PlatoAsteroseismologyView(
                             .fillMaxWidth()
                             .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                             .padding(10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Frecvență ν_max", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Frecvență ν_max", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.nuMaxMicroHz)} µHz", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Separare Δν", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Separare Δν", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.2f", result.deltaNuMicroHz)} µHz", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Densitate medie", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Densitate medie", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.3f", result.meanStellarDensitySun)} ρ_☉", color = AccentAmber, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -115,19 +115,19 @@ fun PlatoAsteroseismologyView(
                     // Solved Properties
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Masă Stelară M*:", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                            Text("${String.format("%.3f", result.stellarMassSun)} M_☉", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Masă Stelară M*:", style = MaterialTheme.typography.bodySmall, color = TextSecondary, fontSize = 9.sp)
+                            Text("${String.format("%.3f", result.stellarMassSun)} M_☉", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
-                        Column {
-                            Text("Rază Stelară R*:", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                            Text("${String.format("%.3f", result.stellarRadiusSun)} R_☉", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Rază Stelară R*:", style = MaterialTheme.typography.bodySmall, color = TextSecondary, fontSize = 9.sp)
+                            Text("${String.format("%.3f", result.stellarRadiusSun)} R_☉", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
-                        Column {
-                            Text("Gravitație log(g):", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                            Text("${String.format("%.2f", result.surfaceGravityLogG)} cgs", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Gravitație log(g):", style = MaterialTheme.typography.bodySmall, color = TextSecondary, fontSize = 9.sp)
+                            Text("${String.format("%.2f", result.surfaceGravityLogG)} cgs", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
                     }
 
@@ -140,15 +140,15 @@ fun PlatoAsteroseismologyView(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text("VÂRSTĂ SISTEM: ${String.format("%.2f", result.stellarAgeGyr)} Gyr", color = AccentGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                                Text("Durată Secvență: ${String.format("%.1f", result.mainSequenceLifetimeGyr)} Gyr", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                                Text("Secvență: ${String.format("%.1f", result.mainSequenceLifetimeGyr)} Gyr", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Rază Planetă: ${String.format("%.2f", result.planetRadiusEarth)} R_Earth", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Rază Planetă: ${String.format("%.2f", result.planetRadiusEarth)} R⊕", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                 Surface(shape = RoundedCornerShape(4.dp), color = AccentCyan.copy(alpha = 0.2f)) {
-                                    Text("Eroare Rază: ±${String.format("%.2f", result.planetRadiusErrorPercent)}% (PLATO GOLD)", color = AccentCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(4.dp))
+                                    Text("±${String.format("%.2f", result.planetRadiusErrorPercent)}% (PLATO GOLD)", color = AccentCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))

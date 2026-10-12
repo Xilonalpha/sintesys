@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -12,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.synthesis.domain.model.Anomaly
 import com.synthesis.domain.model.AnomalySeverity
@@ -65,19 +67,26 @@ fun AnomalyDetailCard(anomaly: Anomaly) {
                 SeverityBadge(anomaly.severity)
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ValueColumn("EXPECTED", String.format("%.2f", anomaly.expectedValue), TextSecondary)
-                ValueColumn("OBSERVED", String.format("%.2f", anomaly.observedValue), AccentCyan)
-                ValueColumn("DEVIATION", "${String.format("%.1f", anomaly.deviationPercent)}%", AccentRed)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ValueColumn("EXPECTED", String.format("%.2f", anomaly.expectedValue), TextSecondary, Modifier.weight(1f))
+                ValueColumn("OBSERVED", String.format("%.2f", anomaly.observedValue), AccentCyan, Modifier.weight(1f))
+                ValueColumn("DEVIATION", "${String.format("%.1f", anomaly.deviationPercent)}%", AccentRed, Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text("ANOMALY SCORE: ${(anomaly.anomalyScore * 100).toInt()}%", color = TextPrimary)
             Spacer(modifier = Modifier.height(12.dp))
             Text("POSSIBLE CAUSES:", color = AccentAmber, style = MaterialTheme.typography.labelLarge)
             anomaly.possibleCauses.forEach { cause ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(cause.description, color = TextSecondary)
-                    Text("${(cause.probability * 100).toInt()}%", color = AccentCyan)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(cause.description, color = TextSecondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("${(cause.probability * 100).toInt()}%", color = AccentCyan, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
         }
@@ -98,9 +107,39 @@ fun SeverityBadge(severity: AnomalySeverity) {
 }
 
 @Composable
-fun ValueColumn(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = color, style = MaterialTheme.typography.headlineLarge)
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelLarge)
+fun ValueColumn(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF030712),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                value,
+                color = color,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                label,
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
 }

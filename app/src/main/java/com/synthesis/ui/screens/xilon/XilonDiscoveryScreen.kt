@@ -1526,22 +1526,22 @@ fun AstrophysicalMetricsCard(res: XilonDetectionResult) {
             Text("DERIVED ASTROPHYSICAL PARAMETERS", color = AccentCyan, style = MaterialTheme.typography.labelMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItem("PERIOD", "${String.format("%.3f", res.orbitalPeriodDays)} d", AccentAmber)
-                MetricItem("DEPTH", "${res.transitDepthPpm.roundToInt()} ppm", AccentCyan)
-                MetricItem("DURATION", "${String.format("%.2f", res.transitDurationHours)} h", TextPrimary)
-                MetricItem("SNR", "${String.format("%.1f", res.signalToNoiseRatio)} σ", if (res.signalToNoiseRatio >= 7.1) AccentGreen else AccentRed)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricItem("PERIOD", "${String.format("%.3f", res.orbitalPeriodDays)} d", AccentAmber, Modifier.weight(1f))
+                MetricItem("DEPTH", "${res.transitDepthPpm.roundToInt()} ppm", AccentCyan, Modifier.weight(1f))
+                MetricItem("DURATION", "${String.format("%.2f", res.transitDurationHours)} h", TextPrimary, Modifier.weight(1f))
+                MetricItem("SNR", "${String.format("%.1f", res.signalToNoiseRatio)} σ", if (res.signalToNoiseRatio >= 7.1) AccentGreen else AccentRed, Modifier.weight(1f))
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = TextSecondary.copy(alpha = 0.15f))
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItem("PLANET RADIUS", res.derivedPlanetRadiusEarth?.let { "${String.format("%.2f", it)} R⊕" } ?: "N/A", AccentGreen)
-                MetricItem("SEMI-MAJOR AXIS", res.derivedSemiMajorAxisAu?.let { "${String.format("%.3f", it)} AU" } ?: "N/A", TextPrimary)
-                MetricItem("TEMP (Teq)", res.derivedEquilibriumTempK?.let { "${it.roundToInt()} K (${(it - 273.15).roundToInt()}°C)" } ?: "N/A", if (res.isHabitableZone) AccentCyan else TextPrimary)
-                MetricItem("ODD/EVEN Δ", "${String.format("%.1f", res.oddEvenTransitDeltaSigma)} σ", if (res.oddEvenTransitDeltaSigma < 4.0) AccentGreen else AccentRed)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricItem("PLANET RADIUS", res.derivedPlanetRadiusEarth?.let { "${String.format("%.2f", it)} R⊕" } ?: "N/A", AccentGreen, Modifier.weight(1f))
+                MetricItem("SEMI-MAJOR", res.derivedSemiMajorAxisAu?.let { "${String.format("%.3f", it)} AU" } ?: "N/A", TextPrimary, Modifier.weight(1f))
+                MetricItem("TEMP (Teq)", res.derivedEquilibriumTempK?.let { "${it.roundToInt()} K" } ?: "N/A", if (res.isHabitableZone) AccentCyan else TextPrimary, Modifier.weight(1f))
+                MetricItem("ODD/EVEN Δ", "${String.format("%.1f", res.oddEvenTransitDeltaSigma)} σ", if (res.oddEvenTransitDeltaSigma < 4.0) AccentGreen else AccentRed, Modifier.weight(1f))
             }
         }
     }
@@ -1808,11 +1808,41 @@ fun PipelineAuditCard(res: XilonDetectionResult) {
 }
 
 @Composable
-fun MetricItem(label: String, value: String, color: Color) {
-    Column {
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(value, color = color, style = MaterialTheme.typography.titleSmall)
+fun MetricItem(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF030712),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                value,
+                color = color,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                label,
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

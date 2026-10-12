@@ -2,9 +2,11 @@ package com.synthesis.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -31,7 +33,8 @@ fun SmartScopeView(
     onSlewTarget: (LiveTransitTarget) -> Unit,
     onStartSequence: (Double, Int, String) -> Unit,
     onStopSequence: () -> Unit,
-    onOpenVisionEngine: () -> Unit = {}
+    onOpenVisionEngine: () -> Unit = {},
+    onOpenTelescopeControl: () -> Unit = {}
 ) {
     var selectedModel by remember { mutableStateOf(telemetry.model) }
     var ipInput by remember { mutableStateOf(telemetry.ipAddress) }
@@ -46,6 +49,44 @@ fun SmartScopeView(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // QUICK SWITCH TO USB-OTG IF USING CELESTRON / PHYSICAL MOUNT
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "🔭 Conectare prin Cablu USB-OTG (NexStar / SynScan)?",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            "Pentru Celestron NexStar 6SE/8SE, Prolific PL2303, FTDI sau Meade, folosește modulul dedicat de control motoare fizice.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onOpenTelescopeControl,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("DESCHIDE USB", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
@@ -95,36 +136,23 @@ fun SmartScopeView(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Model Selector Chips
-                    Text("Model Telescop:", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    // Model Selector Chips with clean horizontal scrolling
+                    Text("Model Telescop Inteligent:", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        SmartScopeModel.values().take(3).forEach { model ->
+                        SmartScopeModel.values().forEach { model ->
                             FilterChip(
                                 selected = selectedModel == model,
                                 onClick = {
                                     selectedModel = model
                                     portInput = model.defaultPort.toString()
                                 },
-                                label = { Text(model.label.split(" ").first(), fontSize = 11.sp) }
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        SmartScopeModel.values().drop(3).forEach { model ->
-                            FilterChip(
-                                selected = selectedModel == model,
-                                onClick = {
-                                    selectedModel = model
-                                    portInput = model.defaultPort.toString()
-                                },
-                                label = { Text(model.label.split(" ").first(), fontSize = 11.sp) }
+                                label = { Text(model.label, fontSize = 11.sp, fontWeight = if (selectedModel == model) FontWeight.Bold else FontWeight.Normal) }
                             )
                         }
                     }
@@ -188,10 +216,43 @@ fun SmartScopeView(
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("TELEMETRIE HARDWARE ÎN DIRECT", style = MaterialTheme.typography.labelMedium, color = AccentCyan, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(10.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Baterie: ${telemetry.batteryPercent}%", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                            Text("Temp. Senzor: ${telemetry.sensorTempC}°C", color = AccentAmber, style = MaterialTheme.typography.bodyMedium)
-                            Text("Tracking: ${if (telemetry.isTracking) "ACTIV" else "OPRIT"}", color = if (telemetry.isTracking) AccentGreen else TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Surface(
+                                color = Color(0xFF0F172A),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${telemetry.batteryPercent}%", color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("Baterie", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFF0F172A),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${telemetry.sensorTempC}°C", color = AccentAmber, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("Senzor", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFF0F172A),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(if (telemetry.isTracking) "ACTIV" else "OPRIT", color = if (telemetry.isTracking) AccentGreen else TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("Tracking", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                                }
+                            }
                         }
                         if (telemetry.targetName != null) {
                             Spacer(modifier = Modifier.height(6.dp))

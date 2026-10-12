@@ -106,18 +106,18 @@ fun SpaceWeatherMagnetosphereView(
                             .fillMaxWidth()
                             .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                             .padding(10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Câmp Magnetic B_p", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Câmp Magnetic", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.2f", result.surfaceMagneticFieldGauss)} G", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Rază Magnetopauză", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Magnetopauză", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.magnetopauseStandoffRadiusRp)} R_p", color = if (result.magnetopauseStandoffRadiusRp > 1.0) AccentGreen else AccentRed, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Presiune Ram Solară", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Presiune Solară", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.solarWindRamPressureNanoPa)} nPa", color = AccentAmber, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -131,14 +131,14 @@ fun SpaceWeatherMagnetosphereView(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Rată Pierdere Masă (Stripping):", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${String.format("%.1f", result.atmosphericMassLossRateKgS)} kg/s", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Pierdere Masă (Stripping):", color = TextSecondary, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                Text("${String.format("%.1f", result.atmosphericMassLossRateKgS)} kg/s", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Timp Retenție Atmosferă:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${String.format("%.1f", result.estimatedAtmosphericLifetimeGyr)} Gyr", color = if (result.estimatedAtmosphericLifetimeGyr >= 4.0) AccentGreen else AccentAmber, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Retenție Atmosferă:", color = TextSecondary, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                Text("${String.format("%.1f", result.estimatedAtmosphericLifetimeGyr)} Gyr", color = if (result.estimatedAtmosphericLifetimeGyr >= 4.0) AccentGreen else AccentAmber, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

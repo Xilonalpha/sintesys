@@ -98,18 +98,18 @@ fun ExomoonTidalOceanView(
                             .fillMaxWidth()
                             .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                             .padding(10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Amplitudine TTV", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Amplitudine TTV", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.ttvAmplitudeSeconds)} s", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Amplitudine TDV", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Amplitudine TDV", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("${String.format("%.1f", result.tdvAmplitudeSeconds)} s", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Column {
-                            Text("Defazaj Orbital", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Defazaj Orbital", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
                             Text("π/2 (Confirmare)", color = AccentGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -123,19 +123,19 @@ fun ExomoonTidalOceanView(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Flux Căldură Mareică:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${String.format("%.3f", result.tidalHeatFluxWattsM2)} W/m² (Europa: 0.05 W/m²)", color = AccentAmber, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Căldură Mareică:", color = TextSecondary, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                Text("${String.format("%.3f", result.tidalHeatFluxWattsM2)} W/m²", color = AccentAmber, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Grosime Crustă Gheață:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${String.format("%.1f", result.estimatedIceShellThicknessKm)} km", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Grosime Crustă Gheață:", color = TextSecondary, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                Text("${String.format("%.1f", result.estimatedIceShellThicknessKm)} km", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Volum Ocean Lichid:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${String.format("%.1f", result.oceanVolumeEarthOceans)}x Oceanele Terrei", color = AccentCyan, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Volum Ocean Lichid:", color = TextSecondary, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                Text("${String.format("%.1f", result.oceanVolumeEarthOceans)}x Terra", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(result.astrobiologicalPotential, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)

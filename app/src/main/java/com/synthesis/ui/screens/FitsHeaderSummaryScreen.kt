@@ -12,9 +12,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -621,41 +623,62 @@ private fun FitsHeaderHeroBanner(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Action row & Preset chips with PDF Export button
+            // Action row: 2 prominent primary buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
                     onClick = onPickFile,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1f)
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
-                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Black)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Încarcă FITS", fontWeight = FontWeight.Bold, color = Color.Black)
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.Black)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Încarcă FITS", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 13.sp)
                 }
 
                 Button(
                     onClick = onExportPdf,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1f)
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
-                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Black)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Exportă PDF", fontWeight = FontWeight.Bold, color = Color.Black)
+                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.Black)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Exportă PDF", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 13.sp)
                 }
+            }
 
-                OutlinedButton(
-                    onClick = { onSelectPreset("WASP-12 b") },
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, DarkBorder),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("WASP-12 b", fontSize = 11.sp)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Presets row: Scrollable chips with real targets
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Preset FITS:", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp)
+                listOf("WASP-12 b", "TOI-1895.01", "Kepler-16 b", "TRAPPIST-1 e").forEach { preset ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0F172A),
+                        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                        modifier = Modifier.clickable { onSelectPreset(preset) }
+                    ) {
+                        Text(
+                            preset,
+                            color = AccentCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
         }
@@ -957,12 +980,14 @@ private fun AtmosphericSnrPreprocessingCard(
                 )
             }
 
-            // Interactive Slider Component
+            // Interactive Slider Component with non-blocking dragging
             Slider(
                 value = snrSlider,
                 onValueChange = { newValue ->
                     snrSlider = newValue
-                    onAdjustSnrThreshold(newValue)
+                },
+                onValueChangeFinished = {
+                    onAdjustSnrThreshold(snrSlider)
                 },
                 valueRange = 1.0f..12.0f,
                 steps = 22,
@@ -1014,36 +1039,36 @@ private fun AtmosphericSnrPreprocessingCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Quick Presets
-            Text("Presetări Rapide Prag SNR:", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp)
+            // Quick Presets with spacious horizontal scrolling
+            Text("Presetări Rapide Prag SNR:", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
             Spacer(modifier = Modifier.height(6.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf(
                     1.5f to "1.5σ Permisiv",
-                    3.0f to "3.0σ Standard",
+                    3.0f to "3.0σ Standard ETD",
                     5.0f to "5.0σ Intens",
-                    8.0f to "8.0σ Urban"
+                    8.0f to "8.0σ Urban Seeing"
                 ).forEach { (presetVal, presetLabel) ->
                     val isSelected = abs(snrSlider - presetVal) < 0.2f
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) AccentGreen.copy(alpha = 0.25f) else Color(0xFF070B14),
-                        border = BorderStroke(1.dp, if (isSelected) AccentGreen else DarkBorder),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                snrSlider = presetVal
-                                onAdjustSnrThreshold(presetVal)
-                            }
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) AccentGreen.copy(alpha = 0.25f) else Color(0xFF0F172A),
+                        border = BorderStroke(1.dp, if (isSelected) AccentGreen else Color(0xFF1E293B)),
+                        modifier = Modifier.clickable {
+                            snrSlider = presetVal
+                            onAdjustSnrThreshold(presetVal)
+                        }
                     ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 6.dp)) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(
                                 presetLabel,
-                                fontSize = 9.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) AccentGreen else TextPrimary
                             )
                         }

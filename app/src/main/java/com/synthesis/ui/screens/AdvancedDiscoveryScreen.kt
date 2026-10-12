@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +69,7 @@ fun AdvancedDiscoveryScreen(
     }
 
     var showAllModulesDialog by remember { mutableStateOf(false) }
+    var showTopMenu by remember { mutableStateOf(false) }
     val biosignatures by viewModel.biosignatures.collectAsState()
     val technosignatures by viewModel.technosignatures.collectAsState()
     val dilutionRescues by viewModel.dilutionRescues.collectAsState()
@@ -266,34 +268,6 @@ fun AdvancedDiscoveryScreen(
                         )
                     }
                     IconButton(
-                        onClick = { showAllModulesDialog = true }
-                    ) {
-                        Icon(
-                            Icons.Default.GridView,
-                            contentDescription = "Catalog Toate Modulele",
-                            tint = AccentCyan
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            viewModel.subscriptionManager.forceExpireTrialForTesting()
-                            Toast.makeText(context, "Perioada de test a fost setată pe expirat. Ecranul de blocare este activ!", Toast.LENGTH_LONG).show()
-                        }
-                    ) {
-                        Icon(
-                            Icons.Default.HourglassBottom,
-                            contentDescription = "Test 1H Lockout",
-                            tint = AccentAmber
-                        )
-                    }
-                    IconButton(onClick = { showDeblendDialog = true }) {
-                        Icon(
-                            Icons.Default.FilterCenterFocus,
-                            contentDescription = "Rescue FP Dialog",
-                            tint = AccentGreen
-                        )
-                    }
-                    IconButton(
                         onClick = {
                             viewModel.saveCurrentModuleToResearchArchive(selectedTab)
                             Toast.makeText(context, "Sinteza modulului '${selectedTab.title}' a fost salvată în Baza de Date Room!", Toast.LENGTH_SHORT).show()
@@ -304,6 +278,45 @@ fun AdvancedDiscoveryScreen(
                             contentDescription = "Salvează în Arhivă Room",
                             tint = AccentCyan
                         )
+                    }
+                    Box {
+                        IconButton(onClick = { showTopMenu = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Mai multe opțiuni",
+                                tint = Color.White
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showTopMenu,
+                            onDismissRequest = { showTopMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Catalog Toate Modulele (18)", color = AccentCyan) },
+                                leadingIcon = { Icon(Icons.Default.GridView, contentDescription = null, tint = AccentCyan) },
+                                onClick = {
+                                    showTopMenu = false
+                                    showAllModulesDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Analiză De-blendare Centroid", color = AccentGreen) },
+                                leadingIcon = { Icon(Icons.Default.FilterCenterFocus, contentDescription = null, tint = AccentGreen) },
+                                onClick = {
+                                    showTopMenu = false
+                                    showDeblendDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Simulare Lockout 1H (Test)", color = AccentAmber) },
+                                leadingIcon = { Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = AccentAmber) },
+                                onClick = {
+                                    showTopMenu = false
+                                    viewModel.subscriptionManager.forceExpireTrialForTesting()
+                                    Toast.makeText(context, "Perioada de test a fost setată pe expirat. Ecranul de blocare este activ!", Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -330,6 +343,7 @@ fun AdvancedDiscoveryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF0F172A))
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -440,8 +454,8 @@ fun AdvancedDiscoveryScreen(
                     onSlewMount = { target ->
                         viewModel.selectTab(AdvancedTab.TELESCOPE_CONTROL)
                         if (!mountTelemetry.isConnected) {
-                            val usbConnected = viewModel.connectMountUsb()
-                            if (!usbConnected) {
+                            val res = viewModel.connectMountUsb()
+                            if (res !is UsbConnectResult.Connected) {
                                 viewModel.connectMountSim()
                             }
                         }
@@ -528,9 +542,19 @@ fun AdvancedDiscoveryScreen(
                     telemetry = mountTelemetry,
                     transits = liveTransits,
                     onConnectUsb = {
-                        val ok = viewModel.connectMountUsb()
-                        if (!ok) {
-                            Toast.makeText(context, "Niciun cablu USB detectat. Treci pe simulator pentru test.", Toast.LENGTH_SHORT).show()
+                        when (val res = viewModel.connectMountUsb()) {
+                            is UsbConnectResult.Connected -> {
+                                Toast.makeText(context, "✓ Conectat prin USB-OTG: ${res.chipName}!", Toast.LENGTH_SHORT).show()
+                            }
+                            is UsbConnectResult.PermissionRequested -> {
+                                Toast.makeText(context, "Permisiune USB solicitată! Apasă 'Permite' pe dialogul de pe ecran.", Toast.LENGTH_LONG).show()
+                            }
+                            is UsbConnectResult.DeviceNotFound -> {
+                                Toast.makeText(context, res.reason, Toast.LENGTH_LONG).show()
+                            }
+                            is UsbConnectResult.OpenFailed -> {
+                                Toast.makeText(context, res.reason, Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
                     onConnectWifi = { ip, port -> viewModel.connectMountWifi(ip, port) },
@@ -568,7 +592,8 @@ fun AdvancedDiscoveryScreen(
                     onSlewTarget = { target -> viewModel.slewSmartScopeToTarget(target) },
                     onStartSequence = { exp, gain, filter -> viewModel.startSmartScopeSequence(exp, gain, filter) },
                     onStopSequence = { viewModel.stopSmartScopeSequence() },
-                    onOpenVisionEngine = { viewModel.selectTab(AdvancedTab.TELESCOPE_VISION) }
+                    onOpenVisionEngine = { viewModel.selectTab(AdvancedTab.TELESCOPE_VISION) },
+                    onOpenTelescopeControl = { viewModel.selectTab(AdvancedTab.TELESCOPE_CONTROL) }
                 )
                 AdvancedTab.BIG_BANG_COSMOLOGY -> BigBangUniverseScreen(
                     engine = viewModel.bigBangCosmologyEngine
@@ -587,7 +612,14 @@ fun AdvancedDiscoveryScreen(
                 )
                 AdvancedTab.AR_SKY_CAMERA -> ArSkyCameraScreen(
                     arService = viewModel.arSkyTrackerService,
-                    onNavigateBack = { viewModel.selectTab(AdvancedTab.SMART_SCOPE) }
+                    onNavigateBack = { viewModel.selectTab(AdvancedTab.SMART_SCOPE) },
+                    onSlewTelescope = { alt, az, name ->
+                        val target = viewModel.arSkyTrackerService.getFamousTargets().find { it.name == name }
+                        if (target != null) {
+                            val raHours = target.raDeg / 15.0
+                            viewModel.celestronNexStarDriverService.slewToCoordinatesPrecise(raHours, target.decDeg, name)
+                        }
+                    }
                 )
                 AdvancedTab.EXOMOON_OCEANS -> ExomoonTidalOceanView(
                     exomoons = exomoons
@@ -789,6 +821,34 @@ private fun TelescopeControlView(
                             Text("SIMULATOR", fontSize = 11.sp, color = AccentGreen)
                         }
                     }
+
+                    if (!telemetry.isConnected) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1E293B).copy(alpha = 0.6f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    "💡 GHID ADAPTOR PROLIFIC PL2303 & CELESTRON NEXSTAR:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AccentCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "1. Dacă ai testat cu 'Serial USB Terminal', închide complet acea aplicație (Swipe Up din Recente), altfel portul USB e blocat de Android!\n" +
+                                            "2. Activează 'Conexiune OTG' în Setările telefonului dacă adaptorul nu este alimentat.\n" +
+                                            "3. Asigură-te că telecomanda NexStar+ este aprinsă și a trecut de ecranul de inițializare.\n" +
+                                            "4. Apasă 'CABLU USB-OTG' și 'Permite' la dialogul de sistem Android.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -900,14 +960,16 @@ private fun TelescopeControlView(
 
                     // SELECTOR VITEZA MOTOARE
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SlewRate.values().forEach { rate ->
                             FilterChip(
                                 selected = selectedRate == rate,
                                 onClick = { selectedRate = rate },
-                                label = { Text(rate.label, fontSize = 10.sp) }
+                                label = { Text(rate.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
                             )
                         }
                     }

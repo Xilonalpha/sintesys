@@ -52,6 +52,7 @@ class TelescopeCameraVisionService @Inject constructor(
     // Processing jobs & tracking state
     private var processingJob: Job? = null
     private var streamJob: Job? = null
+    private var filterJob: Job? = null
     private var initialTargetX = 0f
     private var initialTargetY = 0f
     private var referenceBaselineRatio = 0.0
@@ -204,32 +205,38 @@ class TelescopeCameraVisionService @Inject constructor(
 
     /**
      * Dynamically adjusts the Signal-to-Noise Ratio (SNR) threshold and re-filters the FITS
-     * raw pixel buffer in real-time, allowing users to suppress seeing turbulence interactively.
+     * raw pixel buffer asynchronously in a background coroutine, preventing any UI freezes or ANRs.
      */
     fun updateSnrFilterThreshold(threshold: Float) {
         val currentThresh = threshold.coerceIn(1.0f, 15.0f)
-        val dataBuffer = lastRawFitsBuffer
-        val header = _visionState.value.lastLoadedFitsHeader
-
         _visionState.value = _visionState.value.copy(
             snrFilterThreshold = currentThresh
         )
 
+        filterJob?.cancel()
+        val dataBuffer = lastRawFitsBuffer
+        val header = _visionState.value.lastLoadedFitsHeader
+
         if (dataBuffer != null && header != null) {
-            val w = header.width
-            val h = header.height
-            val pixels = dataBuffer.getAtmosphericFilteredPixels(snrThreshold = currentThresh)
-            val stats = dataBuffer.computeStats()
-            val frameBjd = header.bjd ?: header.jd ?: (System.currentTimeMillis() / 86400000.0 + 2440587.5)
+            filterJob = scope.launch(Dispatchers.Default) {
+                val w = header.width
+                val h = header.height
+                val pixels = dataBuffer.getAtmosphericFilteredPixels(snrThreshold = currentThresh)
+                yield()
+                val stats = dataBuffer.computeStats()
+                yield()
+                val frameBjd = header.bjd ?: header.jd ?: (System.currentTimeMillis() / 86400000.0 + 2440587.5)
 
-            // Re-process frame with updated SNR filtered buffer
-            processLuminanceFrame(pixels, w, h, frameBjd, 1.0)
+                // Re-process frame with updated SNR filtered buffer
+                processLuminanceFrame(pixels, w, h, frameBjd, 1.0)
+                yield()
 
-            _visionState.value = _visionState.value.copy(
-                snrFilterThreshold = currentThresh,
-                atmosphericNoiseSigmaMad = stats.madSigma,
-                statusMessage = "Filtru SNR actualizat: ${String.format(java.util.Locale.US, "%.1f", currentThresh)}σ. Buffer FITS re-filtrat în timp real."
-            )
+                _visionState.value = _visionState.value.copy(
+                    snrFilterThreshold = currentThresh,
+                    atmosphericNoiseSigmaMad = stats.madSigma,
+                    statusMessage = "Filtru SNR actualizat: ${String.format(java.util.Locale.US, "%.1f", currentThresh)}σ. Buffer FITS re-filtrat în fundal."
+                )
+            }
         }
     }
 
