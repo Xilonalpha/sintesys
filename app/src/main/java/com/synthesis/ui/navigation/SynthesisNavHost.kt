@@ -10,7 +10,19 @@ import androidx.navigation.navArgument
 import com.synthesis.ui.screens.*
 import com.synthesis.ui.screens.xilon.XilonDiscoveryScreen
 import com.synthesis.ui.screens.terra.TerraFrontierScreen
+import com.synthesis.ui.components.exoplanet.Tic167418703RechartsView
+import com.synthesis.ui.components.exoplanet.Tic141913165RechartsView
+import androidx.compose.material3.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.background
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.synthesis.ui.theme.DarkBackground
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SynthesisNavHost(
     navController: NavHostController = rememberNavController()
@@ -172,6 +184,87 @@ fun SynthesisNavHost(
             SynthesizedResearchScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+        composable("tic_167418703") {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                "TIC 167418703 • Recharts Vetting",
+                                color = androidx.compose.ui.graphics.Color.White,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Înapoi",
+                                    tint = androidx.compose.ui.graphics.Color.White
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = DarkBackground
+                        )
+                    )
+                }
+            ) { padding ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(DarkBackground)
+                        .padding(padding)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Tic167418703RechartsView(
+                            onOpenInXilonScan = { tic ->
+                                navController.navigate("xilon_discovery?tic=$tic")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        composable("tic_141913165") {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("TIC 141913165 • Raport CTOI") },
+                        navigationIcon = {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Înapoi")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = DarkBackground,
+                            titleContentColor = androidx.compose.ui.graphics.Color.White,
+                            navigationIconContentColor = androidx.compose.ui.graphics.Color.White
+                        )
+                    )
+                }
+            ) { padding ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(DarkBackground)
+                        .padding(padding)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Tic141913165RechartsView(
+                            onOpenInXilonScan = { tic ->
+                                navController.navigate("xilon_discovery?tic=$tic")
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }

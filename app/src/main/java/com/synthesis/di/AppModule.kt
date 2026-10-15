@@ -45,6 +45,10 @@ object AppModule {
         database.discoveryDao()
 
     @Provides @Singleton
+    fun providePureTicDao(database: SynthesisDatabase): com.synthesis.data.local.dao.PureTicDao =
+        database.pureTicDao()
+
+    @Provides @Singleton
     fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         val cacheSize = 50L * 1024 * 1024 // 50 MB HTTP Cache

@@ -11,6 +11,7 @@ import com.synthesis.engine.xilon.XilonTransitDetector
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,6 +27,10 @@ class XilonRepository @Inject constructor(
 ) {
 
     fun getPureTicCatalog(): List<PureTicCandidate> = pureTicCatalogRepo.getPureTicCatalog()
+
+    fun getPureTicCatalogFlow(): StateFlow<List<PureTicCandidate>> = pureTicCatalogRepo.dynamicCatalogFlow
+
+    fun addNewLiveCandidate(sectorHint: Int? = null): PureTicCandidate = pureTicCatalogRepo.addNewLiveCandidate(sectorHint)
 
     fun getSavedDiscoveries(): Flow<List<XilonDiscoveryEntity>> = xilonDiscoveryDao.getAllDiscoveries()
 
@@ -156,8 +161,8 @@ class XilonRepository @Inject constructor(
                         radiusSun = pureCandidate.stellarRadiusSun,
                         massSun = pureCandidate.stellarMassSun,
                         distancePc = pureCandidate.distancePc,
-                        ra = if (cleanTic == "141913165") 84.1481 else null,
-                        dec = if (cleanTic == "141913165") -64.2185 else null,
+                        ra = if (cleanTic == "141913165") 94.751006 else if (cleanTic == "167418703") 99.761469 else null,
+                        dec = if (cleanTic == "141913165") -72.979799 else if (cleanTic == "167418703") -67.971250 else null,
                         luminosity = 1.0
                     )
                 } else {
@@ -167,7 +172,8 @@ class XilonRepository @Inject constructor(
                         "384159646" -> Pair(281.3328, -43.1491) // TOI-1895
                         "268301217" -> Pair(217.1824, 62.4842) // TOI-2076
                         "100100827" -> Pair(286.9154, 51.9163) // TOI-4633
-                        "141913165" -> Pair(84.1481, -64.2185)
+                        "141913165" -> Pair(94.751006, -72.979799)
+                        "167418703" -> Pair(99.761469, -67.971250)
                         else -> Pair(null, null)
                     }
                     MastStarProperties(

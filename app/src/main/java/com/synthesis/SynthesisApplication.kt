@@ -20,6 +20,9 @@ class SynthesisApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var tessSurveyWorkManager: TessSurveyWorkManager
 
+    @Inject
+    lateinit var tessMastPollingWorkManager: com.synthesis.service.worker.TessMastPollingWorkManager
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -31,5 +34,7 @@ class SynthesisApplication : Application(), Configuration.Provider {
         astronomicalSyncManager.schedulePeriodicCelestialSync(this)
         // Automatically schedule periodic background TESS archive transit survey scout (every 6 hours)
         tessSurveyWorkManager.schedulePeriodicSurvey(this, repeatHours = 6)
+        // Automatically schedule periodic background MAST API candidate polling task (every 4 hours)
+        tessMastPollingWorkManager.schedulePeriodicPolling(this, repeatHours = 4)
     }
 }

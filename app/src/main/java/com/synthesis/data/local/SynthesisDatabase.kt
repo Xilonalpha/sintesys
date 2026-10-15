@@ -15,9 +15,10 @@ import com.synthesis.data.local.entity.*
         XilonDiscoveryEntity::class,
         CachedExoplanetEntity::class,
         SynthesizedResearchEntity::class,
-        DiscoveryEntity::class
+        DiscoveryEntity::class,
+        PureTicEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class SynthesisDatabase : RoomDatabase() {
@@ -30,4 +31,5 @@ abstract class SynthesisDatabase : RoomDatabase() {
     abstract fun cachedExoplanetDao(): CachedExoplanetDao
     abstract fun synthesizedResearchDao(): SynthesizedResearchDao
     abstract fun discoveryDao(): DiscoveryDao
+    abstract fun pureTicDao(): PureTicDao
 }

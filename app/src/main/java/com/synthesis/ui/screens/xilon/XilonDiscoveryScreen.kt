@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -70,6 +71,8 @@ import com.synthesis.domain.model.exoplanet.DipShapeClassification
 import com.synthesis.domain.model.exoplanet.DipRecurrenceVerdict
 import androidx.compose.ui.window.Dialog
 import com.synthesis.ui.components.exoplanet.XilonDetectionRechartsView
+import com.synthesis.ui.components.exoplanet.Tic167418703RechartsView
+import com.synthesis.ui.components.exoplanet.Tic141913165RechartsView
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -102,6 +105,17 @@ fun XilonDiscoveryScreen(
     val selectedDip by viewModel.selectedDip.collectAsState()
     val dipSensitivity by viewModel.dipSensitivitySigma.collectAsState()
     val isDipHighlightActive by viewModel.isDipHighlightActive.collectAsState()
+    val filteredTicList by viewModel.filteredTicCandidates.collectAsState()
+    val isLiveStreamActive by viewModel.isLiveStreamActive.collectAsState()
+    val liveScanSector by viewModel.liveScanSector.collectAsState()
+    val livePhotonsPerSec by viewModel.livePhotonsPerSec.collectAsState()
+    val sessionDetectionsCount by viewModel.sessionDetectionsCount.collectAsState()
+    val lastDiscoveredCandidate by viewModel.lastDiscoveredCandidate.collectAsState()
+    val ticSearchQuery by viewModel.ticSearchQuery.collectAsState()
+    val ticHabitableOnly by viewModel.ticHabitableOnly.collectAsState()
+    val ticTypeFilter by viewModel.ticTypeFilter.collectAsState()
+    val ticSortOption by viewModel.ticSortOption.collectAsState()
+    val mastWorkManagerStatus by viewModel.mastWorkManagerStatus.collectAsState()
     var showGeminiKeyDialog by remember { mutableStateOf(false) }
     var ticInput by remember { mutableStateOf(initialTicId?.replace("TIC", "", ignoreCase = true)?.trim()?.ifBlank { "25155310" } ?: "25155310") }
     val context = LocalContext.current
@@ -278,8 +292,19 @@ fun XilonDiscoveryScreen(
                         Spacer(modifier = Modifier.height(14.dp))
                         
                         var catalogTab by remember { mutableIntStateOf(0) }
-                        val pureTicList = viewModel.pureTicCatalog
                         val curatedList = viewModel.curatedTargets
+
+                        // Pulsing animation for live stream telemetry
+                        val infiniteTransition = rememberInfiniteTransition(label = "live_pulse")
+                        val livePulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.35f,
+                            targetValue = 1.0f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(durationMillis = 750, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse_alpha"
+                        )
 
                         // Tab Switcher Row: Pure TIC vs NASA Curated
                         Row(
@@ -302,10 +327,19 @@ fun XilonDiscoveryScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Text("🪐", fontSize = 13.sp)
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    if (isLiveStreamActive) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .background(Color(0xFFFF1744).copy(alpha = livePulseAlpha), CircleShape)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                    } else {
+                                        Text("🪐", fontSize = 13.sp)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
                                     Text(
-                                        "TIC FĂRĂ TOI (${pureTicList.size})",
+                                        "TIC FĂRĂ TOI (${filteredTicList.size})",
                                         color = if (catalogTab == 0) Color(0xFFFF5252) else TextSecondary,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
@@ -343,7 +377,7 @@ fun XilonDiscoveryScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         if (catalogTab == 0) {
-                            // PURE TIC CATALOG (NO TOI IN NASA)
+                            // PURE TIC CATALOG (NO TOI IN NASA) - DYNAMIC & LIVE STREAM
                             Surface(
                                 color = Color(0xFF1E1015),
                                 shape = RoundedCornerShape(8.dp),
@@ -355,7 +389,7 @@ fun XilonDiscoveryScreen(
                                         Text("⚡", fontSize = 14.sp)
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            "CATALOG PUR: CANDIDAȚI TIC FĂRĂ TOI OFICIAL",
+                                            "CATALOG DINAMIC: CANDIDAȚI TIC FĂRĂ TOI OFICIAL",
                                             color = Color(0xFFFF5252),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold
@@ -363,7 +397,7 @@ fun XilonDiscoveryScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        "Aceste stele din TESS Input Catalog (TIC) au tranzite reale detectate (Planet Hunters, mono-tranzite lungi, căutări TLS comunitare) dar NASA nu le-a emis alertă TOI din cauza filtrelor automate. Datele sunt virgine în MAST!",
+                                        "Date fotometrice din TESS Input Catalog (TIC) procesate în timp real. Semnale de tranzit virgine (Planet Hunters, mono-tranzite, TLS comunitar) fără alertă TOI NASA. Fluxul este dinamic și se actualizează continuu!",
                                         color = TextSecondary,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontSize = 11.sp
@@ -371,178 +405,644 @@ fun XilonDiscoveryScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                pureTicList.forEach { candidate ->
-                                    val isSelected = ticInput == candidate.ticId
-
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                ticInput = candidate.ticId
-                                                viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
-                                            },
-                                        color = if (isSelected) Color(0xFFFF1744).copy(alpha = 0.15f) else Color(0xFF0F172A),
-                                        shape = RoundedCornerShape(10.dp),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (isSelected) Color(0xFFFF5252) else Color(0xFF334155)
-                                        )
+                            // LIVE TELEMETRY STREAM CONSOLE
+                            Surface(
+                                color = Color(0xFF0F172A),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isLiveStreamActive) Color(0xFFFF1744).copy(alpha = 0.8f) else Color(0xFF334155)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .background(
+                                                        if (isLiveStreamActive) Color(0xFFFF1744).copy(alpha = livePulseAlpha)
+                                                        else Color(0xFF64748B),
+                                                        CircleShape
+                                                    )
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    if (isLiveStreamActive) "🔴 STREAM LIVE TESS ACTIV" else "⏸️ MONITORIZARE LIVE OPRITĂ",
+                                                    color = if (isLiveStreamActive) Color(0xFFFF5252) else Color(0xFF94A3B8),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    if (isLiveStreamActive) "Scanare automată continuă a sectoarelor..." else "Apasă pentru flux live continuu de noi planete TIC",
+                                                    color = TextSecondary,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Button(
+                                                onClick = { viewModel.toggleLiveStream() },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = if (isLiveStreamActive) Color(0xFFDC2626) else Color(0xFF10B981)
+                                                ),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text(
+                                                    if (isLiveStreamActive) "PAUZĂ" else "PORNEȘTE LIVE",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    viewModel.triggerManualSectorScan()
+                                                    Toast.makeText(context, "Scanare sector TESS în curs...", Toast.LENGTH_SHORT).show()
+                                                },
+                                                border = BorderStroke(1.dp, Color(0xFF00E5FF)),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("+SECTOR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Telemetry Data Strip
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Surface(
+                                            color = Color(0xFF1E293B),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Column(modifier = Modifier.padding(6.dp)) {
+                                                Text("SECTOR SCANAT", color = TextSecondary, fontSize = 8.sp)
+                                                Text(liveScanSector, color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                        }
+                                        Surface(
+                                            color = Color(0xFF1E293B),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Column(modifier = Modifier.padding(6.dp)) {
+                                                Text("FLUX MAST", color = TextSecondary, fontSize = 8.sp)
+                                                Text("$livePhotonsPerSec fot/s", color = Color(0xFF34D399), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        Surface(
+                                            color = Color(0xFF1E293B),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Column(modifier = Modifier.padding(6.dp)) {
+                                                Text("NOI ÎN SESIUNE", color = TextSecondary, fontSize = 8.sp)
+                                                Text("+$sessionDetectionsCount", color = Color(0xFFFBBF24), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        Surface(
+                                            color = Color(0xFF1E293B),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Column(modifier = Modifier.padding(6.dp)) {
+                                                Text("TOTAL CATALOG", color = TextSecondary, fontSize = 8.sp)
+                                                Text("${filteredTicList.size}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+
+                                    if (lastDiscoveredCandidate != null) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Surface(
+                                            color = Color(0xFF03261D),
+                                            shape = RoundedCornerShape(6.dp),
+                                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("✨", fontSize = 12.sp)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    "Semnal nou recepționat: ${lastDiscoveredCandidate?.name} (${lastDiscoveredCandidate?.transitDepthPpm?.toInt()} ppm • ${lastDiscoveredCandidate?.sector})",
+                                                    color = Color(0xFF6EE7B7),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // WorkManager Background MAST Poller Strip
+                                    Surface(
+                                        color = Color(0xFF1E1B4B).copy(alpha = 0.7f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.5f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("🛰️", fontSize = 14.sp)
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Column {
+                                                        Text(
+                                                            "WORKMANAGER: POLLING PERIODIC MAST (4h)",
+                                                            color = Color(0xFFA5B4FC),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Text(
+                                                            "Actualizează baza Room în fundal • ${mastWorkManagerStatus.lastRunStatus}",
+                                                            color = Color(0xFFC7D2FE),
+                                                            fontSize = 9.sp,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.width(6.dp))
+
+                                                Button(
+                                                    onClick = {
+                                                        viewModel.triggerMastPollNow()
+                                                        Toast.makeText(context, "WorkManager a lansat interogarea MAST în fundal...", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Color(0xFF6366F1)
+                                                    ),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                    modifier = Modifier.height(28.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text("POLL MAST", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // SEARCH & FILTER BAR
+                            OutlinedTextField(
+                                value = ticSearchQuery,
+                                onValueChange = { viewModel.setTicSearchQuery(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("Caută după TIC ID, sector, nume sau tip...", fontSize = 12.sp, color = TextSecondary) },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp)) },
+                                trailingIcon = {
+                                    if (ticSearchQuery.isNotBlank()) {
+                                        IconButton(onClick = { viewModel.setTicSearchQuery("") }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFFFF5252),
+                                    unfocusedBorderColor = Color(0xFF334155),
+                                    focusedContainerColor = Color(0xFF0F172A),
+                                    unfocusedContainerColor = Color(0xFF0F172A),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Quick Filter Chips Row
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = ticTypeFilter == "ALL" && !ticHabitableOnly,
+                                        onClick = {
+                                            viewModel.setTicTypeFilter("ALL")
+                                            viewModel.setTicHabitableOnly(false)
+                                        },
+                                        label = { Text("Toate (${filteredTicList.size})", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFFFF1744).copy(alpha = 0.3f),
+                                            selectedLabelColor = Color(0xFFFF5252)
+                                        )
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = ticTypeFilter == "LIVE",
+                                        onClick = { viewModel.setTicTypeFilter(if (ticTypeFilter == "LIVE") "ALL" else "LIVE") },
+                                        label = { Text("📡 Doar Live Ingested", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.25f),
+                                            selectedLabelColor = Color(0xFF00E5FF)
+                                        )
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = ticHabitableOnly,
+                                        onClick = { viewModel.setTicHabitableOnly(!ticHabitableOnly) },
+                                        label = { Text("🌱 Zonă Locuibilă", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = AccentGreen.copy(alpha = 0.25f),
+                                            selectedLabelColor = AccentGreen
+                                        )
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = ticTypeFilter == "SUPER_EARTH",
+                                        onClick = { viewModel.setTicTypeFilter(if (ticTypeFilter == "SUPER_EARTH") "ALL" else "SUPER_EARTH") },
+                                        label = { Text("🌍 Super-Pământ", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = ticTypeFilter == "NEPTUNE",
+                                        onClick = { viewModel.setTicTypeFilter(if (ticTypeFilter == "NEPTUNE") "ALL" else "NEPTUNE") },
+                                        label = { Text("🌊 Neptunian", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = ticTypeFilter == "JOVIAN",
+                                        onClick = { viewModel.setTicTypeFilter(if (ticTypeFilter == "JOVIAN") "ALL" else "JOVIAN") },
+                                        label = { Text("🪐 Giganți Gazoși", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = ticTypeFilter == "MONO_TRANSIT",
+                                        onClick = { viewModel.setTicTypeFilter(if (ticTypeFilter == "MONO_TRANSIT") "ALL" else "MONO_TRANSIT") },
+                                        label = { Text("⏱️ Mono-tranzite Lungi", fontSize = 10.sp) },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Sort selector row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Sortare:", color = TextSecondary, fontSize = 10.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf(
+                                        com.synthesis.domain.model.xilon.TicSortOption.LIVE_NEWEST,
+                                        com.synthesis.domain.model.xilon.TicSortOption.SNR_DESC,
+                                        com.synthesis.domain.model.xilon.TicSortOption.DEPTH_DESC,
+                                        com.synthesis.domain.model.xilon.TicSortOption.PERIOD_ASC
+                                    ).forEach { opt ->
+                                        Surface(
+                                            modifier = Modifier.clickable { viewModel.setTicSortOption(opt) },
+                                            color = if (ticSortOption == opt) Color(0xFFFF5252).copy(alpha = 0.2f) else Color(0xFF1E293B),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = if (ticSortOption == opt) BorderStroke(1.dp, Color(0xFFFF5252)) else null
+                                        ) {
+                                            Text(
+                                                opt.label,
+                                                fontSize = 9.sp,
+                                                color = if (ticSortOption == opt) Color(0xFFFF5252) else Color(0xFF94A3B8),
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            if (filteredTicList.isEmpty()) {
+                                Surface(
+                                    color = Color(0xFF0F172A),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text("🔍", fontSize = 28.sp)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "Niciun candidat TIC nu corespunde filtrului",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "Apasă pe '+SECTOR' pentru a genera instant o detecție nouă sau resetează căutarea.",
+                                            color = TextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Button(
+                                            onClick = {
+                                                viewModel.setTicSearchQuery("")
+                                                viewModel.setTicHabitableOnly(false)
+                                                viewModel.setTicTypeFilter("ALL")
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
+                                        ) {
+                                            Text("Resetează Filtrele", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    filteredTicList.forEach { candidate ->
+                                        val isSelected = ticInput == candidate.ticId
+
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    ticInput = candidate.ticId
+                                                    viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
+                                                },
+                                            color = if (isSelected) Color(0xFFFF1744).copy(alpha = 0.15f) else Color(0xFF0F172A),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) Color(0xFFFF5252)
+                                                else if (candidate.isLiveIngested) Color(0xFF10B981).copy(alpha = 0.6f)
+                                                else Color(0xFF334155)
+                                            )
+                                        ) {
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        if (candidate.isLiveIngested) {
+                                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(6.dp)
+                                                                        .background(Color(0xFF10B981), CircleShape)
+                                                                )
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(
+                                                                    "📡 RECEPTAT LIVE ÎN TIMP REAL",
+                                                                    color = Color(0xFF34D399),
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.ExtraBold
+                                                                )
+                                                            }
+                                                            Spacer(modifier = Modifier.height(2.dp))
+                                                        }
                                                         Text(
                                                             candidate.name,
                                                             style = MaterialTheme.typography.labelMedium,
                                                             fontWeight = FontWeight.Bold,
                                                             color = if (isSelected) Color(0xFFFF5252) else Color.White
                                                         )
-                                                    }
-                                                    Text(
-                                                        "${candidate.sector} • Mag: ${String.format(Locale.US, "%.2f", candidate.apparentMag)} • Distanță: ${candidate.distancePc.toInt()} pc",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = TextSecondary,
-                                                        fontSize = 10.sp
-                                                    )
-                                                }
-
-                                                Button(
-                                                    onClick = {
-                                                        ticInput = candidate.ticId
-                                                        viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
-                                                        Toast.makeText(context, "Lansare scanare Xilon pentru TIC ${candidate.ticId}...", Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = if (isSelected) Color(0xFFFF1744) else Color(0xFFDC2626),
-                                                        contentColor = Color.White
-                                                    ),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                    modifier = Modifier.height(30.dp)
-                                                ) {
-                                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
-                                                    Spacer(modifier = Modifier.width(3.dp))
-                                                    Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(6.dp))
-
-                                            // Badges Row
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Surface(color = Color(0xFFFF1744).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                                                    Text(
-                                                        "TIC PUR • 0 TOI",
-                                                        color = Color(0xFFFF5252),
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                                if (candidate.isInHabitableZone) {
-                                                    Surface(color = AccentGreen.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
                                                         Text(
-                                                            "ZONĂ LOCUIBILĂ",
-                                                            color = AccentGreen,
+                                                            "${candidate.sector} • Mag: ${String.format(Locale.US, "%.2f", candidate.apparentMag)} • Distanță: ${candidate.distancePc.toInt()} pc",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = TextSecondary,
+                                                            fontSize = 10.sp
+                                                        )
+                                                    }
+
+                                                    Button(
+                                                        onClick = {
+                                                            ticInput = candidate.ticId
+                                                            viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
+                                                            Toast.makeText(context, "Lansare scanare Xilon pentru TIC ${candidate.ticId}...", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = if (isSelected) Color(0xFFFF1744) else Color(0xFFDC2626),
+                                                            contentColor = Color.White
+                                                        ),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(30.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                        Spacer(modifier = Modifier.width(3.dp))
+                                                        Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.height(6.dp))
+
+                                                // Badges Row
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Surface(color = Color(0xFFFF1744).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                        Text(
+                                                            "TIC PUR • 0 TOI",
+                                                            color = Color(0xFFFF5252),
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    if (candidate.isInHabitableZone) {
+                                                        Surface(color = AccentGreen.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                            Text(
+                                                                "ZONĂ LOCUIBILĂ",
+                                                                color = AccentGreen,
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    Surface(color = Color(0xFF0284C7).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                        Text(
+                                                            "SNR ${String.format(Locale.US, "%.1f", candidate.snrSigma)}σ",
+                                                            color = Color(0xFF38BDF8),
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    Surface(color = AccentAmber.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                                        Text(
+                                                            "Δσ ${String.format(Locale.US, "%.2f", candidate.profileSymmetryDeltaSigma)}σ",
+                                                            color = AccentAmber,
                                                             fontSize = 9.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                                         )
                                                     }
                                                 }
-                                                Surface(color = AccentAmber.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                                                    Text(
-                                                        candidate.scientificPriority,
-                                                        color = AccentAmber,
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                    )
+
+                                                Spacer(modifier = Modifier.height(6.dp))
+
+                                                // Metrics grid
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Surface(
+                                                        color = Color(0xFF1E293B),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(6.dp)) {
+                                                            Text("ADÂNCIME", color = TextSecondary, fontSize = 8.sp)
+                                                            Text("${candidate.transitDepthPpm.toInt()} ppm", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                    Surface(
+                                                        color = Color(0xFF1E293B),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(6.dp)) {
+                                                            Text("PERIOADĂ", color = TextSecondary, fontSize = 8.sp)
+                                                            Text(candidate.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.1f", it)} d" } ?: "Mono-tranzit", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                    Surface(
+                                                        color = Color(0xFF1E293B),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(6.dp)) {
+                                                            Text("DURATĂ", color = TextSecondary, fontSize = 8.sp)
+                                                            Text("${String.format(Locale.US, "%.1f", candidate.transitDurationHours)} h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                    Surface(
+                                                        color = Color(0xFF1E293B),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(6.dp)) {
+                                                            Text("TEFF STEA", color = TextSecondary, fontSize = 8.sp)
+                                                            Text("${candidate.stellarTeffK.toInt()} K", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                Text(
+                                                    "Tip estimat: ${candidate.potentialPlanetaryType}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color(0xFFE2E8F0),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    "De ce NU are TOI: ${candidate.whyNoToi}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color(0xFFFDE68A),
+                                                    fontSize = 10.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    "Sursă: ${candidate.discoveryOrigin} • ${candidate.scientificNotes}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = TextSecondary,
+                                                    fontSize = 10.sp
+                                                )
+
+                                                if (candidate.ticId == "167418703") {
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Button(
+                                                        onClick = {
+                                                            ticInput = "167418703"
+                                                            viewModel.runScan("167418703", candidate.estimatedPeriodDays)
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.ShowChart, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            "RECHARTS: ADÂNCIME 4200 PPM & SIMETRIE 2.09σ",
+                                                            color = Color.Black,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.ExtraBold
+                                                        )
+                                                    }
+                                                }
+                                                if (candidate.ticId == "141913165") {
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Button(
+                                                        onClick = {
+                                                            ticInput = "141913165"
+                                                            viewModel.runScan("141913165", candidate.estimatedPeriodDays)
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.ShowChart, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            "RECHARTS: ADÂNCIME 1600 PPM & SIMETRIE 0.598σ",
+                                                            color = Color.Black,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.ExtraBold
+                                                        )
+                                                    }
                                                 }
                                             }
-
-                                            Spacer(modifier = Modifier.height(6.dp))
-
-                                            // Metrics grid
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Surface(
-                                                    color = Color(0xFF1E293B),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Column(modifier = Modifier.padding(6.dp)) {
-                                                        Text("ADÂNCIME", color = TextSecondary, fontSize = 8.sp)
-                                                        Text("${candidate.transitDepthPpm.toInt()} ppm", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-                                                Surface(
-                                                    color = Color(0xFF1E293B),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Column(modifier = Modifier.padding(6.dp)) {
-                                                        Text("PERIOADĂ", color = TextSecondary, fontSize = 8.sp)
-                                                        Text(candidate.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.1f", it)} d" } ?: "Mono-tranzit", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-                                                Surface(
-                                                    color = Color(0xFF1E293B),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Column(modifier = Modifier.padding(6.dp)) {
-                                                        Text("DURATĂ", color = TextSecondary, fontSize = 8.sp)
-                                                        Text("${candidate.transitDurationHours} h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-                                                Surface(
-                                                    color = Color(0xFF1E293B),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Column(modifier = Modifier.padding(6.dp)) {
-                                                        Text("TEFF STEA", color = TextSecondary, fontSize = 8.sp)
-                                                        Text("${candidate.stellarTeffK.toInt()} K", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text(
-                                                "Tip estimat: ${candidate.potentialPlanetaryType}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color(0xFFE2E8F0),
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                "De ce NU are TOI: ${candidate.whyNoToi}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color(0xFFFDE68A),
-                                                fontSize = 10.sp
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                "Sursă: ${candidate.discoveryOrigin} • ${candidate.scientificNotes}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = TextSecondary,
-                                                fontSize = 10.sp
-                                            )
                                         }
                                     }
                                 }
@@ -703,6 +1203,22 @@ fun XilonDiscoveryScreen(
                             isResponding = isChatResponding,
                             onSendMessage = { viewModel.askGemini(it) }
                         )
+                    }
+
+                    // 2.7 Dedicated Recharts Transit & Symmetry Visualizer for CTOI Candidates
+                    if (res.star.ticId.contains("167418703")) {
+                        item {
+                            Tic167418703RechartsView(
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                    if (res.star.ticId.contains("141913165")) {
+                        item {
+                            Tic141913165RechartsView(
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
 
                     // 3. Light Curve Canvas Visualization with Transit Dip Scanner
@@ -1295,12 +1811,22 @@ fun LightCurveVisualizerCard(
                     }
                 }
             } else if (chartEngine == ChartEngine.RECHARTS) {
-                // Interactive Recharts Engine with highlighted dip regions
-                XilonDetectionRechartsView(
-                    res = res,
-                    dipReport = dipReport,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (res.star.ticId.contains("167418703")) {
+                    Tic167418703RechartsView(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else if (res.star.ticId.contains("141913165")) {
+                    Tic141913165RechartsView(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    // Interactive Recharts Engine with highlighted dip regions
+                    XilonDetectionRechartsView(
+                        res = res,
+                        dipReport = dipReport,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             } else {
                 // Native Compose Canvas Engine with Binning Controls
                 Row(

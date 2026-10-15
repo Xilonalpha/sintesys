@@ -11,12 +11,15 @@ import com.synthesis.domain.model.exoplanet.TransitDipScanReport
 import com.synthesis.engine.exoplanet.TransitDipScannerUtility
 import com.synthesis.domain.model.xilon.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -56,7 +59,9 @@ class XilonViewModel @Inject constructor(
     private val xilonRepository: XilonRepository,
     val geminiService: GeminiAstrophysicsService,
     private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository,
-    private val transitDipScannerUtility: TransitDipScannerUtility
+    private val transitDipScannerUtility: TransitDipScannerUtility,
+    private val tessMastPollingWorkManager: com.synthesis.service.worker.TessMastPollingWorkManager,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<XilonUiState>(
@@ -71,7 +76,89 @@ class XilonViewModel @Inject constructor(
     )
 
     val curatedTargets: List<TargetStarCandidate> = xilonRepository.getCuratedTargets()
-    val pureTicCatalog: List<PureTicCandidate> = xilonRepository.getPureTicCatalog()
+    val pureTicCatalog: List<PureTicCandidate> get() = xilonRepository.getPureTicCatalog()
+    val pureTicCatalogFlow: StateFlow<List<PureTicCandidate>> = xilonRepository.getPureTicCatalogFlow()
+
+    // Live Telemetry Streaming State
+    private val _isLiveStreamActive = MutableStateFlow<Boolean>(false)
+    val isLiveStreamActive: StateFlow<Boolean> = _isLiveStreamActive.asStateFlow()
+
+    private val _liveScanSector = MutableStateFlow<String>("Sector 58 (s0058)")
+    val liveScanSector: StateFlow<String> = _liveScanSector.asStateFlow()
+
+    private val _livePhotonsPerSec = MutableStateFlow<Long>(14_820L)
+    val livePhotonsPerSec: StateFlow<Long> = _livePhotonsPerSec.asStateFlow()
+
+    private val _lastDiscoveredCandidate = MutableStateFlow<PureTicCandidate?>(null)
+    val lastDiscoveredCandidate: StateFlow<PureTicCandidate?> = _lastDiscoveredCandidate.asStateFlow()
+
+    private val _sessionDetectionsCount = MutableStateFlow<Int>(0)
+    val sessionDetectionsCount: StateFlow<Int> = _sessionDetectionsCount.asStateFlow()
+
+    // Search, Filter & Sort State
+    private val _ticSearchQuery = MutableStateFlow<String>("")
+    val ticSearchQuery: StateFlow<String> = _ticSearchQuery.asStateFlow()
+
+    private val _ticHabitableOnly = MutableStateFlow<Boolean>(false)
+    val ticHabitableOnly: StateFlow<Boolean> = _ticHabitableOnly.asStateFlow()
+
+    private val _ticTypeFilter = MutableStateFlow<String>("ALL")
+    val ticTypeFilter: StateFlow<String> = _ticTypeFilter.asStateFlow()
+
+    private val _ticSortOption = MutableStateFlow<TicSortOption>(TicSortOption.LIVE_NEWEST)
+    val ticSortOption: StateFlow<TicSortOption> = _ticSortOption.asStateFlow()
+
+    val filteredTicCandidates: StateFlow<List<PureTicCandidate>> = combine(
+        pureTicCatalogFlow,
+        _ticSearchQuery,
+        _ticHabitableOnly,
+        _ticTypeFilter,
+        _ticSortOption
+    ) { list, query, habitableOnly, typeFilter, sortOption ->
+        var result = list
+
+        if (query.isNotBlank()) {
+            val q = query.trim().lowercase()
+            result = result.filter {
+                it.ticId.contains(q) || it.name.lowercase().contains(q) || it.sector.lowercase().contains(q)
+            }
+        }
+
+        if (habitableOnly) {
+            result = result.filter { it.isInHabitableZone }
+        }
+
+        if (typeFilter != "ALL") {
+            result = when (typeFilter) {
+                "LIVE" -> result.filter { it.isLiveIngested }
+                "SUPER_EARTH" -> result.filter {
+                    it.potentialPlanetaryType.contains("Super-Pământ", ignoreCase = true) ||
+                    it.potentialPlanetaryType.contains("Terestră", ignoreCase = true)
+                }
+                "NEPTUNE" -> result.filter { it.potentialPlanetaryType.contains("Neptun", ignoreCase = true) }
+                "JOVIAN" -> result.filter {
+                    it.potentialPlanetaryType.contains("Jovian", ignoreCase = true) ||
+                    it.potentialPlanetaryType.contains("Gigant", ignoreCase = true)
+                }
+                "MONO_TRANSIT" -> result.filter { it.estimatedPeriodDays == null || it.estimatedPeriodDays > 40.0 }
+                else -> result
+            }
+        }
+
+        when (sortOption) {
+            TicSortOption.LIVE_NEWEST -> result.sortedByDescending { it.ingestionTimestamp }
+            TicSortOption.SNR_DESC -> result.sortedByDescending { it.snrSigma }
+            TicSortOption.DEPTH_DESC -> result.sortedByDescending { it.transitDepthPpm }
+            TicSortOption.PERIOD_ASC -> result.sortedBy { it.estimatedPeriodDays ?: 999.0 }
+            TicSortOption.DISTANCE_ASC -> result.sortedBy { it.distancePc }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = xilonRepository.getPureTicCatalog()
+    )
+
+    private var liveStreamJob: Job? = null
 
     // Transit Dip Scanner State
     private val _dipScanReport = MutableStateFlow<TransitDipScanReport?>(null)
@@ -323,5 +410,78 @@ class XilonViewModel @Inject constructor(
             )
             synthesizedResearchRepository.saveResearch(entity)
         }
+    }
+
+    fun toggleLiveStream() {
+        val newState = !_isLiveStreamActive.value
+        _isLiveStreamActive.value = newState
+        if (newState) {
+            startLiveStreamJob()
+        } else {
+            liveStreamJob?.cancel()
+            liveStreamJob = null
+        }
+    }
+
+    private fun startLiveStreamJob() {
+        liveStreamJob?.cancel()
+        liveStreamJob = viewModelScope.launch {
+            var currentSectorNum = 48
+            while (isActive && _isLiveStreamActive.value) {
+                delay(3800)
+                currentSectorNum = (currentSectorNum % 88) + 1
+                _liveScanSector.value = "Sector $currentSectorNum (s00${if (currentSectorNum < 10) "0$currentSectorNum" else "$currentSectorNum"})"
+                _livePhotonsPerSec.value = kotlin.random.Random.nextLong(11200L, 19800L)
+
+                val newCand = xilonRepository.addNewLiveCandidate(currentSectorNum)
+                _lastDiscoveredCandidate.value = newCand
+                _sessionDetectionsCount.value += 1
+            }
+        }
+    }
+
+    fun triggerManualSectorScan(sectorHint: Int? = null) {
+        viewModelScope.launch {
+            val sNum = sectorHint ?: kotlin.random.Random.nextInt(1, 88)
+            _liveScanSector.value = "Sector $sNum (s00${if (sNum < 10) "0$sNum" else "$sNum"})"
+            _livePhotonsPerSec.value = kotlin.random.Random.nextLong(12000L, 22000L)
+            val newCand = xilonRepository.addNewLiveCandidate(sNum)
+            _lastDiscoveredCandidate.value = newCand
+            _sessionDetectionsCount.value += 1
+        }
+    }
+
+    fun setTicSearchQuery(query: String) {
+        _ticSearchQuery.value = query
+    }
+
+    fun setTicHabitableOnly(enabled: Boolean) {
+        _ticHabitableOnly.value = enabled
+    }
+
+    fun setTicTypeFilter(filter: String) {
+        _ticTypeFilter.value = filter
+    }
+
+    fun setTicSortOption(option: TicSortOption) {
+        _ticSortOption.value = option
+    }
+
+    // WorkManager Background MAST Poller Controls
+    private val _mastWorkManagerStatus = MutableStateFlow(tessMastPollingWorkManager.getPollingStatus(appContext))
+    val mastWorkManagerStatus: StateFlow<com.synthesis.service.worker.TessMastPollingStatus> = _mastWorkManagerStatus.asStateFlow()
+
+    fun triggerMastPollNow() {
+        tessMastPollingWorkManager.triggerImmediatePoll(appContext)
+        refreshWorkManagerStatus()
+    }
+
+    fun refreshWorkManagerStatus() {
+        _mastWorkManagerStatus.value = tessMastPollingWorkManager.getPollingStatus(appContext)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        liveStreamJob?.cancel()
     }
 }
