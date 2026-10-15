@@ -28,6 +28,9 @@ interface PureTicDao {
     @Query("SELECT COUNT(*) FROM pure_tic_candidates")
     suspend fun getCount(): Int
 
+    @Query("DELETE FROM pure_tic_candidates WHERE ticId IN (SELECT ticId FROM pure_tic_candidates WHERE isLiveIngested = 1 ORDER BY ingestionTimestamp ASC LIMIT :count)")
+    suspend fun deleteOldestLive(count: Int)
+
     @Query("DELETE FROM pure_tic_candidates")
     suspend fun clearAll()
 }

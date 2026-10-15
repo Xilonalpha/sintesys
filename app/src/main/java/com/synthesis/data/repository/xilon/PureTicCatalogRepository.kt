@@ -614,6 +614,12 @@ class PureTicCatalogRepository @Inject constructor(
             try {
                 pureTicDao.insert(PureTicEntity.fromDomain(newCandidate))
                 cachedExoplanetDao.insertAll(listOf(CachedExoplanetEntity.fromDomain(toExoplanetCandidate(newCandidate))))
+                
+                // Keep Room database bounded to prevent memory heap inflation
+                val currentCount = pureTicDao.getCount()
+                if (currentCount > 100) {
+                    pureTicDao.deleteOldestLive(currentCount - 80)
+                }
             } catch (e: Exception) {
                 android.util.Log.w("PureTicCatalogRepo", "Failed to save candidate to Room: ${e.message}")
             }
@@ -632,6 +638,11 @@ class PureTicCatalogRepository @Inject constructor(
         try {
             pureTicDao.insertAll(candidates.map { PureTicEntity.fromDomain(it) })
             cachedExoplanetDao.insertAll(candidates.map { CachedExoplanetEntity.fromDomain(toExoplanetCandidate(it)) })
+
+            val currentCount = pureTicDao.getCount()
+            if (currentCount > 100) {
+                pureTicDao.deleteOldestLive(currentCount - 80)
+            }
         } catch (e: Exception) {
             android.util.Log.e("PureTicCatalogRepo", "Error persisting polled MAST candidates to Room: ${e.message}", e)
         }

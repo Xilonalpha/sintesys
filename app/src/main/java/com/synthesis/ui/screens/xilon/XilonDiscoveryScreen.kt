@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -294,18 +295,6 @@ fun XilonDiscoveryScreen(
                         var catalogTab by remember { mutableIntStateOf(0) }
                         val curatedList = viewModel.curatedTargets
 
-                        // Pulsing animation for live stream telemetry
-                        val infiniteTransition = rememberInfiniteTransition(label = "live_pulse")
-                        val livePulseAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.35f,
-                            targetValue = 1.0f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(durationMillis = 750, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "pulse_alpha"
-                        )
-
                         // Tab Switcher Row: Pure TIC vs NASA Curated
                         Row(
                             modifier = Modifier
@@ -328,10 +317,10 @@ fun XilonDiscoveryScreen(
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     if (isLiveStreamActive) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .background(Color(0xFFFF1744).copy(alpha = livePulseAlpha), CircleShape)
+                                        LivePulseDot(
+                                            isActive = true,
+                                            activeColor = Color(0xFFFF1744),
+                                            size = 8.dp
                                         )
                                         Spacer(modifier = Modifier.width(5.dp))
                                     } else {
@@ -424,14 +413,11 @@ fun XilonDiscoveryScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .background(
-                                                        if (isLiveStreamActive) Color(0xFFFF1744).copy(alpha = livePulseAlpha)
-                                                        else Color(0xFF64748B),
-                                                        CircleShape
-                                                    )
+                                            LivePulseDot(
+                                                isActive = isLiveStreamActive,
+                                                activeColor = Color(0xFFFF1744),
+                                                inactiveColor = Color(0xFF64748B),
+                                                size = 10.dp
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Column {
@@ -803,246 +789,44 @@ fun XilonDiscoveryScreen(
                                     }
                                 }
                             } else {
+                                var visibleCandidateCount by remember { mutableIntStateOf(15) }
+                                val displayedCandidates = remember(filteredTicList, visibleCandidateCount) {
+                                    filteredTicList.take(visibleCandidateCount)
+                                }
+
                                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    filteredTicList.forEach { candidate ->
-                                        val isSelected = ticInput == candidate.ticId
-
-                                        Surface(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    ticInput = candidate.ticId
-                                                    viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
-                                                },
-                                            color = if (isSelected) Color(0xFFFF1744).copy(alpha = 0.15f) else Color(0xFF0F172A),
-                                            shape = RoundedCornerShape(10.dp),
-                                            border = BorderStroke(
-                                                1.dp,
-                                                if (isSelected) Color(0xFFFF5252)
-                                                else if (candidate.isLiveIngested) Color(0xFF10B981).copy(alpha = 0.6f)
-                                                else Color(0xFF334155)
-                                            )
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        if (candidate.isLiveIngested) {
-                                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .size(6.dp)
-                                                                        .background(Color(0xFF10B981), CircleShape)
-                                                                )
-                                                                Spacer(modifier = Modifier.width(4.dp))
-                                                                Text(
-                                                                    "📡 RECEPTAT LIVE ÎN TIMP REAL",
-                                                                    color = Color(0xFF34D399),
-                                                                    fontSize = 9.sp,
-                                                                    fontWeight = FontWeight.ExtraBold
-                                                                )
-                                                            }
-                                                            Spacer(modifier = Modifier.height(2.dp))
-                                                        }
-                                                        Text(
-                                                            candidate.name,
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = if (isSelected) Color(0xFFFF5252) else Color.White
-                                                        )
-                                                        Text(
-                                                            "${candidate.sector} • Mag: ${String.format(Locale.US, "%.2f", candidate.apparentMag)} • Distanță: ${candidate.distancePc.toInt()} pc",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = TextSecondary,
-                                                            fontSize = 10.sp
-                                                        )
-                                                    }
-
-                                                    Button(
-                                                        onClick = {
-                                                            ticInput = candidate.ticId
-                                                            viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
-                                                            Toast.makeText(context, "Lansare scanare Xilon pentru TIC ${candidate.ticId}...", Toast.LENGTH_SHORT).show()
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = if (isSelected) Color(0xFFFF1744) else Color(0xFFDC2626),
-                                                            contentColor = Color.White
-                                                        ),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                        modifier = Modifier.height(30.dp)
-                                                    ) {
-                                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
-                                                        Spacer(modifier = Modifier.width(3.dp))
-                                                        Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-
-                                                Spacer(modifier = Modifier.height(6.dp))
-
-                                                // Badges Row
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Surface(color = Color(0xFFFF1744).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                                                        Text(
-                                                            "TIC PUR • 0 TOI",
-                                                            color = Color(0xFFFF5252),
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                    if (candidate.isInHabitableZone) {
-                                                        Surface(color = AccentGreen.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                                                            Text(
-                                                                "ZONĂ LOCUIBILĂ",
-                                                                color = AccentGreen,
-                                                                fontSize = 9.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                    Surface(color = Color(0xFF0284C7).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                                                        Text(
-                                                            "SNR ${String.format(Locale.US, "%.1f", candidate.snrSigma)}σ",
-                                                            color = Color(0xFF38BDF8),
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                    Surface(color = AccentAmber.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                                                        Text(
-                                                            "Δσ ${String.format(Locale.US, "%.2f", candidate.profileSymmetryDeltaSigma)}σ",
-                                                            color = AccentAmber,
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
-
-                                                Spacer(modifier = Modifier.height(6.dp))
-
-                                                // Metrics grid
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Surface(
-                                                        color = Color(0xFF1E293B),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Column(modifier = Modifier.padding(6.dp)) {
-                                                            Text("ADÂNCIME", color = TextSecondary, fontSize = 8.sp)
-                                                            Text("${candidate.transitDepthPpm.toInt()} ppm", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                        }
-                                                    }
-                                                    Surface(
-                                                        color = Color(0xFF1E293B),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Column(modifier = Modifier.padding(6.dp)) {
-                                                            Text("PERIOADĂ", color = TextSecondary, fontSize = 8.sp)
-                                                            Text(candidate.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.1f", it)} d" } ?: "Mono-tranzit", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                        }
-                                                    }
-                                                    Surface(
-                                                        color = Color(0xFF1E293B),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Column(modifier = Modifier.padding(6.dp)) {
-                                                            Text("DURATĂ", color = TextSecondary, fontSize = 8.sp)
-                                                            Text("${String.format(Locale.US, "%.1f", candidate.transitDurationHours)} h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                        }
-                                                    }
-                                                    Surface(
-                                                        color = Color(0xFF1E293B),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Column(modifier = Modifier.padding(6.dp)) {
-                                                            Text("TEFF STEA", color = TextSecondary, fontSize = 8.sp)
-                                                            Text("${candidate.stellarTeffK.toInt()} K", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                        }
-                                                    }
-                                                }
-
-                                                Spacer(modifier = Modifier.height(6.dp))
-                                                Text(
-                                                    "Tip estimat: ${candidate.potentialPlanetaryType}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = Color(0xFFE2E8F0),
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    "De ce NU are TOI: ${candidate.whyNoToi}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = Color(0xFFFDE68A),
-                                                    fontSize = 10.sp
-                                                )
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    "Sursă: ${candidate.discoveryOrigin} • ${candidate.scientificNotes}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = TextSecondary,
-                                                    fontSize = 10.sp
-                                                )
-
-                                                if (candidate.ticId == "167418703") {
-                                                    Spacer(modifier = Modifier.height(8.dp))
-                                                    Button(
-                                                        onClick = {
-                                                            ticInput = "167418703"
-                                                            viewModel.runScan("167418703", candidate.estimatedPeriodDays)
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        modifier = Modifier.fillMaxWidth().height(36.dp)
-                                                    ) {
-                                                        Icon(Icons.Default.ShowChart, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text(
-                                                            "RECHARTS: ADÂNCIME 4200 PPM & SIMETRIE 2.09σ",
-                                                            color = Color.Black,
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.ExtraBold
-                                                        )
-                                                    }
-                                                }
-                                                if (candidate.ticId == "141913165") {
-                                                    Spacer(modifier = Modifier.height(8.dp))
-                                                    Button(
-                                                        onClick = {
-                                                            ticInput = "141913165"
-                                                            viewModel.runScan("141913165", candidate.estimatedPeriodDays)
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        modifier = Modifier.fillMaxWidth().height(36.dp)
-                                                    ) {
-                                                        Icon(Icons.Default.ShowChart, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text(
-                                                            "RECHARTS: ADÂNCIME 1600 PPM & SIMETRIE 0.598σ",
-                                                            color = Color.Black,
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.ExtraBold
-                                                        )
-                                                    }
-                                                }
+                                    displayedCandidates.forEach { candidate ->
+                                        PureTicCandidateCard(
+                                            candidate = candidate,
+                                            isSelected = (ticInput == candidate.ticId),
+                                            onSelect = {
+                                                ticInput = candidate.ticId
+                                                viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
+                                            },
+                                            onScan = {
+                                                ticInput = candidate.ticId
+                                                viewModel.runScan(candidate.ticId, candidate.estimatedPeriodDays)
+                                                Toast.makeText(context, "Lansare scanare Xilon pentru TIC ${candidate.ticId}...", Toast.LENGTH_SHORT).show()
                                             }
+                                        )
+                                    }
+
+                                    if (filteredTicList.size > visibleCandidateCount) {
+                                        Button(
+                                            onClick = { visibleCandidateCount += 15 },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                                            border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.5f)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                                        ) {
+                                            Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                "Afișează următorii 15 candidați (Încă ${filteredTicList.size - visibleCandidateCount} în catalog)",
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         }
                                     }
                                 }
@@ -1051,91 +835,19 @@ fun XilonDiscoveryScreen(
                             // CURATED TARGETS (NASA TOI & CONTROL)
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 curatedList.forEach { target ->
-                                    val isSelected = ticInput == target.ticId
-                                    val isHighPriority = target.advisoryPriority.contains("PRIORITATE MAXIMĂ") || target.advisoryPriority.contains("CERCETARE ÎNALTĂ")
-                                    val isControl = target.advisoryPriority.contains("CONTROL")
-                                    
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                ticInput = target.ticId
-                                                viewModel.runScan(target.ticId)
-                                            },
-                                        color = if (isSelected) AccentCyan.copy(alpha = 0.15f) else Color(0xFF0F172A),
-                                        shape = RoundedCornerShape(10.dp),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (isSelected) AccentCyan
-                                            else if (isHighPriority) AccentAmber.copy(alpha = 0.6f)
-                                            else if (isControl) Color(0xFF334155)
-                                            else AccentGreen.copy(alpha = 0.4f)
-                                        )
-                                    ) {
-                                        Column(modifier = Modifier.padding(10.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                                    Surface(
-                                                        color = if (isHighPriority) AccentAmber.copy(alpha = 0.2f)
-                                                               else if (isControl) Color(0xFF334155)
-                                                               else AccentGreen.copy(alpha = 0.2f),
-                                                        shape = RoundedCornerShape(4.dp)
-                                                    ) {
-                                                        Text(
-                                                            target.advisoryPriority,
-                                                            color = if (isHighPriority) AccentAmber else if (isControl) TextSecondary else AccentGreen,
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(
-                                                        target.name,
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (isSelected) AccentCyan else Color.White
-                                                    )
-                                                }
-                                                
-                                                Button(
-                                                    onClick = {
-                                                        ticInput = target.ticId
-                                                        viewModel.runScan(target.ticId)
-                                                    },
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = if (isSelected) AccentCyan else Color(0xFF1E293B),
-                                                        contentColor = if (isSelected) Color.Black else AccentCyan
-                                                    ),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                    modifier = Modifier.height(28.dp)
-                                                ) {
-                                                    Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                target.scientificReason,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (isHighPriority) Color(0xFFFDE68A) else TextSecondary,
-                                                fontSize = 11.sp
-                                            )
-                                            
-                                            Spacer(modifier = Modifier.height(3.dp))
-                                            Text(
-                                                "Sector: ${target.sector} • Mag: ${target.estimatedMag} • Clasificare: ${target.knownClassification}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = TextSecondary,
-                                                fontSize = 9.sp
-                                            )
+                                    CuratedTargetCard(
+                                        target = target,
+                                        isSelected = (ticInput == target.ticId),
+                                        onSelect = {
+                                            ticInput = target.ticId
+                                            viewModel.runScan(target.ticId)
+                                        },
+                                        onScan = {
+                                            ticInput = target.ticId
+                                            viewModel.runScan(target.ticId)
+                                            Toast.makeText(context, "Lansare scanare Xilon pentru ${target.name}...", Toast.LENGTH_SHORT).show()
                                         }
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -3715,5 +3427,360 @@ fun GeminiApiKeyDialog(
         containerColor = DarkSurface
     )
 }
+
+@Composable
+fun LivePulseDot(
+    isActive: Boolean,
+    activeColor: Color = Color(0xFFFF1744),
+    inactiveColor: Color = Color(0xFF64748B),
+    size: androidx.compose.ui.unit.Dp = 8.dp,
+    modifier: Modifier = Modifier
+) {
+    if (isActive) {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse_anim")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 750, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse_alpha"
+        )
+        Box(
+            modifier = modifier
+                .size(size)
+                .graphicsLayer { this.alpha = alpha }
+                .background(activeColor, CircleShape)
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .size(size)
+                .background(inactiveColor, CircleShape)
+        )
+    }
+}
+
+@Composable
+fun PureTicCandidateCard(
+    candidate: PureTicCandidate,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    onScan: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect),
+        color = if (isSelected) Color(0xFFFF1744).copy(alpha = 0.15f) else Color(0xFF0F172A),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) Color(0xFFFF5252)
+            else if (candidate.isLiveIngested) Color(0xFF10B981).copy(alpha = 0.6f)
+            else Color(0xFF334155)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    if (candidate.isLiveIngested) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color(0xFF10B981), CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "📡 RECEPTAT LIVE ÎN TIMP REAL",
+                                color = Color(0xFF34D399),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                    Text(
+                        candidate.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color(0xFFFF5252) else Color.White
+                    )
+                    Text(
+                        "${candidate.sector} • Mag: ${String.format(Locale.US, "%.2f", candidate.apparentMag)} • Distanță: ${candidate.distancePc.toInt()} pc",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+
+                Button(
+                    onClick = onScan,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSelected) Color(0xFFFF1744) else Color(0xFFDC2626),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(30.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Badges Row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(color = Color(0xFFFF1744).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                    Text(
+                        "TIC PUR • 0 TOI",
+                        color = Color(0xFFFF5252),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                }
+                if (candidate.isInHabitableZone) {
+                    Surface(color = AccentGreen.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            "ZONĂ LOCUIBILĂ",
+                            color = AccentGreen,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Surface(color = Color(0xFF0284C7).copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                    Text(
+                        "SNR ${String.format(Locale.US, "%.1f", candidate.snrSigma)}σ",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                }
+                Surface(color = AccentAmber.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                    Text(
+                        "Δσ ${String.format(Locale.US, "%.2f", candidate.profileSymmetryDeltaSigma)}σ",
+                        color = AccentAmber,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Metrics grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(6.dp)) {
+                        Text("ADÂNCIME", color = TextSecondary, fontSize = 8.sp)
+                        Text("${candidate.transitDepthPpm.toInt()} ppm", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(6.dp)) {
+                        Text("PERIOADĂ", color = TextSecondary, fontSize = 8.sp)
+                        Text(candidate.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.1f", it)} d" } ?: "Mono-tranzit", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(6.dp)) {
+                        Text("DURATĂ", color = TextSecondary, fontSize = 8.sp)
+                        Text("${String.format(Locale.US, "%.1f", candidate.transitDurationHours)} h", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(6.dp)) {
+                        Text("TEFF STEA", color = TextSecondary, fontSize = 8.sp)
+                        Text("${candidate.stellarTeffK.toInt()} K", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "Tip estimat: ${candidate.potentialPlanetaryType}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFE2E8F0),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                "De ce NU are TOI: ${candidate.whyNoToi}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFDE68A),
+                fontSize = 10.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                "Sursă: ${candidate.discoveryOrigin} • ${candidate.scientificNotes}",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                fontSize = 10.sp
+            )
+
+            if (candidate.ticId == "167418703") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onScan,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                ) {
+                    Icon(Icons.Default.ShowChart, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "RECHARTS: ADÂNCIME 4200 PPM & SIMETRIE 2.09σ",
+                        color = Color.Black,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+            if (candidate.ticId == "141913165") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onScan,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                ) {
+                    Icon(Icons.Default.ShowChart, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "RECHARTS: ADÂNCIME 1600 PPM & SIMETRIE 0.598σ",
+                        color = Color.Black,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CuratedTargetCard(
+    target: TargetStarCandidate,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    onScan: () -> Unit
+) {
+    val isHighPriority = target.advisoryPriority.contains("PRIORITATE MAXIMĂ") || target.advisoryPriority.contains("CERCETARE ÎNALTĂ")
+    val isControl = target.advisoryPriority.contains("CONTROL")
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect),
+        color = if (isSelected) AccentCyan.copy(alpha = 0.15f) else Color(0xFF0F172A),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) AccentCyan
+            else if (isHighPriority) AccentAmber.copy(alpha = 0.6f)
+            else if (isControl) Color(0xFF334155)
+            else AccentGreen.copy(alpha = 0.4f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Surface(
+                        color = if (isHighPriority) AccentAmber.copy(alpha = 0.2f)
+                        else if (isControl) Color(0xFF334155)
+                        else AccentGreen.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            target.advisoryPriority,
+                            color = if (isHighPriority) AccentAmber else if (isControl) TextSecondary else AccentGreen,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        target.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) AccentCyan else Color.White
+                    )
+                }
+
+                Button(
+                    onClick = onScan,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSelected) AccentCyan else Color(0xFF1E293B),
+                        contentColor = if (isSelected) Color.Black else AccentCyan
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text(if (isSelected) "SCANAT" else "SCANĂ", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                target.scientificReason,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isHighPriority) Color(0xFFFDE68A) else TextSecondary,
+                fontSize = 11.sp
+            )
+
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                "Sector: ${target.sector} • Mag: ${target.estimatedMag} • Clasificare: ${target.knownClassification}",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+                fontSize = 9.sp
+            )
+        }
+    }
+}
+
 
 
