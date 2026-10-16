@@ -100,7 +100,7 @@ object AppModule {
     // arXiv (export.arxiv.org)
     @Provides @Singleton @ArxivRetrofit
     fun provideArxivRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl("http://export.arxiv.org/").client(client).addConverterFactory(ScalarsConverterFactory.create()).build()
+        .baseUrl("https://export.arxiv.org/").client(client).addConverterFactory(ScalarsConverterFactory.create()).build()
     @Provides @Singleton fun provideArxivApi(@ArxivRetrofit retrofit: Retrofit): ArxivApi = retrofit.create(ArxivApi::class.java)
 
     // ESA Gaia (gaia.aip.de)

@@ -11,6 +11,7 @@ import com.synthesis.domain.model.exoplanet.TransitDipScanReport
 import com.synthesis.engine.exoplanet.TransitDipScannerUtility
 import com.synthesis.domain.model.xilon.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +61,10 @@ class XilonViewModel @Inject constructor(
     val geminiService: GeminiAstrophysicsService,
     private val synthesizedResearchRepository: com.synthesis.data.repository.SynthesizedResearchRepository,
     private val transitDipScannerUtility: TransitDipScannerUtility,
+    private val synthesisSparkEngine: com.synthesis.engine.spark.SynthesisSparkEngine,
+    val nasaExoFopExporter: com.synthesis.service.NasaExoFopExporter,
+    val missionFlightBenchmarkEngine: com.synthesis.engine.flight.MissionFlightBenchmarkEngine,
+    val flightReadinessDossierExporter: com.synthesis.service.FlightReadinessDossierExporter,
     private val tessMastPollingWorkManager: com.synthesis.service.worker.TessMastPollingWorkManager,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
@@ -189,9 +194,58 @@ class XilonViewModel @Inject constructor(
     private val _isApiKeySet = MutableStateFlow<Boolean>(false)
     val isApiKeySet: StateFlow<Boolean> = _isApiKeySet.asStateFlow()
 
+    // Dynamic Gemini Model Management (Gemini 3.8 Flash, 3.5 Flash, Latest, Pro)
+    val activeGeminiModel: StateFlow<String> = geminiService.getActiveModelFlow()
+        .stateIn(viewModelScope, SharingStarted.Lazily, GeminiAstrophysicsService.MODEL_GEMINI_3_8_FLASH)
+
+    val availableGeminiModels = GeminiAstrophysicsService.AVAILABLE_MODELS
+
+    // SYNTHESIS SPARK Distributed Analytics Engine State
+    private val _sparkReport = MutableStateFlow<com.synthesis.domain.model.spark.SparkExecutionReport?>(null)
+    val sparkReport: StateFlow<com.synthesis.domain.model.spark.SparkExecutionReport?> = _sparkReport.asStateFlow()
+
+    private val _isSparkRunning = MutableStateFlow<Boolean>(false)
+    val isSparkRunning: StateFlow<Boolean> = _isSparkRunning.asStateFlow()
+
     init {
         viewModelScope.launch {
             _isApiKeySet.value = geminiService.isAiKeyConfigured()
+        }
+    }
+
+    fun selectGeminiModel(model: String) {
+        viewModelScope.launch {
+            geminiService.setActiveModel(model)
+            val current = _uiState.value
+            if (current is XilonUiState.Success) {
+                runGeminiAnalysis(current.result)
+            }
+        }
+    }
+
+    fun runSparkAnalysis() {
+        val current = _uiState.value
+        val points = if (current is XilonUiState.Success) {
+            current.result.lightCurveSample
+        } else emptyList()
+
+        val ticId = if (current is XilonUiState.Success) {
+            current.result.star.ticId
+        } else "TIC-SPARK-STREAM"
+
+        val period = if (current is XilonUiState.Success) {
+            current.result.orbitalPeriodDays
+        } else 3.8425
+
+        viewModelScope.launch {
+            _isSparkRunning.value = true
+            val report = synthesisSparkEngine.executeDistributedTransitSearch(
+                ticId = ticId,
+                points = points,
+                nominalPeriodDays = period
+            )
+            _sparkReport.value = report
+            _isSparkRunning.value = false
         }
     }
 
@@ -217,10 +271,11 @@ class XilonViewModel @Inject constructor(
             // Seed initial greeting in chat if empty
             if (_chatMessages.value.isEmpty()) {
                 val rEarth = detection.derivedPlanetRadiusEarth ?: 1.0
+                val modelName = activeGeminiModel.value
                 _chatMessages.value = listOf(
                     XilonAiChatMessage(
-                        sender = "XILON AI (Gemini)",
-                        text = "Salut! Sunt asistentul tău astrofizician neuronal alimentat de Gemini 3.5 Flash. Am analizat curba fotometrică a stelei TIC ${detection.star.ticId} și candidatul de ${String.format(java.util.Locale.US, "%.1f", rEarth)} R⊕. Pune-mi orice întrebare despre semnal, probabilitatea de fals pozitiv sau instrumentele JWST!",
+                        sender = "XILON AI ($modelName)",
+                        text = "Salut! Sunt asistentul tău astrofizician neuronal alimentat de $modelName. Am analizat curba fotometrică a stelei TIC ${detection.star.ticId} și candidatul de ${String.format(java.util.Locale.US, "%.1f", rEarth)} R⊕. Pune-mi orice întrebare despre semnal, probabilitatea de fals pozitiv sau instrumentele JWST!",
                         isUser = false
                     )
                 )
@@ -271,6 +326,18 @@ class XilonViewModel @Inject constructor(
             xilonRepository.deleteDiscovery(id)
         }
     }
+
+    suspend fun exportAllDiscoveriesExoFopJson(): String = nasaExoFopExporter.exportAllDiscoveriesJson()
+
+    suspend fun exportAllDiscoveriesExoFopCsv(): String = nasaExoFopExporter.exportAllDiscoveriesCsv()
+
+    suspend fun exportSingleDiscoveryExoFopJson(id: Int): String? = nasaExoFopExporter.exportSingleDiscoveryJson(id)
+
+    suspend fun exportSingleDiscoveryExoFopCsv(id: Int): String? = nasaExoFopExporter.exportSingleDiscoveryCsv(id)
+
+    suspend fun exportCurrentDetectionJson(res: com.synthesis.domain.model.xilon.XilonDetectionResult): String = nasaExoFopExporter.exportDetectionResultJson(res)
+
+    suspend fun exportCurrentDetectionCsv(res: com.synthesis.domain.model.xilon.XilonDetectionResult): String = nasaExoFopExporter.exportDetectionResultCsv(res)
 
     fun runScan(ticIdInput: String, periodDaysInput: Double? = null) {
         val cleanTic = ticIdInput.trim().replace("TIC", "", ignoreCase = true).trim()
@@ -478,6 +545,36 @@ class XilonViewModel @Inject constructor(
 
     fun refreshWorkManagerStatus() {
         _mastWorkManagerStatus.value = tessMastPollingWorkManager.getPollingStatus(appContext)
+    }
+
+    // TRL 9 Flight Readiness Qualification Suite
+    private val _trl9Dossier = MutableStateFlow<com.synthesis.domain.model.flight.FlightReadinessDossier?>(null)
+    val trl9Dossier: StateFlow<com.synthesis.domain.model.flight.FlightReadinessDossier?> = _trl9Dossier.asStateFlow()
+
+    private val _isTrl9Running = MutableStateFlow<Boolean>(false)
+    val isTrl9Running: StateFlow<Boolean> = _isTrl9Running.asStateFlow()
+
+    fun runTrl9Qualification() {
+        if (_isTrl9Running.value) return
+        viewModelScope.launch(Dispatchers.Default) {
+            _isTrl9Running.value = true
+            try {
+                val dossier = missionFlightBenchmarkEngine.runFullFlightQualificationSuite()
+                _trl9Dossier.value = dossier
+            } finally {
+                _isTrl9Running.value = false
+            }
+        }
+    }
+
+    fun exportTrl9DossierMarkdown(): String {
+        val dossier = _trl9Dossier.value ?: missionFlightBenchmarkEngine.runFullFlightQualificationSuite()
+        return flightReadinessDossierExporter.generateMarkdownDossier(dossier)
+    }
+
+    fun exportTrl9DossierJson(): String {
+        val dossier = _trl9Dossier.value ?: missionFlightBenchmarkEngine.runFullFlightQualificationSuite()
+        return flightReadinessDossierExporter.generateJsonDossier(dossier)
     }
 
     override fun onCleared() {

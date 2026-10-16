@@ -31,8 +31,23 @@ private val Context.dataStore by preferencesDataStore(name = "gemini_prefs")
 class GeminiAstrophysicsService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        const val MODEL_GEMINI_3_8_FLASH = "gemini-3.8-flash"
+        const val MODEL_GEMINI_3_5_FLASH = "gemini-3.5-flash"
+        const val MODEL_GEMINI_FLASH_LATEST = "gemini-flash-latest"
+        const val MODEL_GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
+
+        val AVAILABLE_MODELS = listOf(
+            MODEL_GEMINI_3_8_FLASH,
+            MODEL_GEMINI_3_5_FLASH,
+            MODEL_GEMINI_FLASH_LATEST,
+            MODEL_GEMINI_3_1_PRO
+        )
+    }
+
     private val gson = Gson()
     private val geminiKeyPref = stringPreferencesKey("gemini_user_api_key")
+    private val geminiModelPref = stringPreferencesKey("gemini_selected_model")
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -40,8 +55,20 @@ class GeminiAstrophysicsService @Inject constructor(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val activeModel = "gemini-3.5-flash"
-    private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/$activeModel:generateContent"
+    suspend fun getActiveModel(): String {
+        val savedModel = context.dataStore.data.map { it[geminiModelPref] ?: "" }.first().trim()
+        return if (savedModel.isNotBlank()) savedModel else MODEL_GEMINI_3_8_FLASH
+    }
+
+    fun getActiveModelFlow(): kotlinx.coroutines.flow.Flow<String> {
+        return context.dataStore.data.map { it[geminiModelPref] ?: MODEL_GEMINI_3_8_FLASH }
+    }
+
+    suspend fun setActiveModel(model: String) {
+        context.dataStore.edit { prefs ->
+            prefs[geminiModelPref] = model.trim()
+        }
+    }
 
     suspend fun getEffectiveApiKey(): String {
         val userSavedKey = context.dataStore.data.map { it[geminiKeyPref] ?: "" }.first().trim()
@@ -85,11 +112,12 @@ class GeminiAstrophysicsService @Inject constructor(
             4. VERDICT ȘTIINȚIFIC FINAL & RECOMANDĂRI DE URMARE (Observații de viteză radială, spectroscopie)
         """.trimIndent()
 
+        val model = getActiveModel()
         try {
             val responseText = callGeminiApi(apiKey, systemInstructionText, prompt)
             GeminiAnalysisResult(
                 isLiveAiGenerated = true,
-                modelName = activeModel,
+                modelName = model,
                 analysisDossier = responseText,
                 confidenceScorePercent = calculateAiConfidence(result)
             )
@@ -172,8 +200,9 @@ class GeminiAstrophysicsService @Inject constructor(
         }
     }
 
-    private fun callGeminiApi(apiKey: String, systemInstruction: String, userPrompt: String): String {
-        val url = "$baseUrl?key=$apiKey"
+    private suspend fun callGeminiApi(apiKey: String, systemInstruction: String, userPrompt: String): String {
+        val model = getActiveModel()
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
 
         val requestBodyMap = mapOf(
             "systemInstruction" to mapOf(

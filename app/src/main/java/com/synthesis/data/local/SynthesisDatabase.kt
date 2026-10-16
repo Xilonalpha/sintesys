@@ -18,7 +18,7 @@ import com.synthesis.data.local.entity.*
         DiscoveryEntity::class,
         PureTicEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class SynthesisDatabase : RoomDatabase() {

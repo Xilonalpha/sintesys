@@ -54,7 +54,10 @@ class XilonRepository @Inject constructor(
             isHabitableZone = result.isHabitableZone,
             archetype = result.compositionClass?.label,
             archivalStatus = result.archivalCrossMatch.status.name,
-            notes = notes
+            notes = notes,
+            raDeg = result.star.ra ?: result.astrometry?.raDeg,
+            decDeg = result.star.dec ?: result.astrometry?.decDeg,
+            epochBjd = result.astrometry?.bjdTdbCurrent
         )
         xilonDiscoveryDao.insertDiscovery(entity)
     }

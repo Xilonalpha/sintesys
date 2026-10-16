@@ -26,5 +26,8 @@ data class XilonDiscoveryEntity(
     val archetype: String?,
     val archivalStatus: String,
     val scannedAt: Long = System.currentTimeMillis(),
-    val notes: String? = null
+    val notes: String? = null,
+    val raDeg: Double? = null,
+    val decDeg: Double? = null,
+    val epochBjd: Double? = null
 )

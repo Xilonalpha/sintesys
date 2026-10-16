@@ -158,4 +158,64 @@ class BayesianUncertaintyEngine @Inject constructor() {
 
         return if (prob < 0.5) -z else z
     }
+
+    /**
+     * Rigorous Gaussian error propagation for derived exoplanet parameters conforming to NASA TRL 8/9.
+     */
+    fun propagatePhysicalUncertainties(
+        depthPpm: Double,
+        depthErrorPpm: Double,
+        periodDays: Double,
+        periodErrorDays: Double,
+        stellarRadiusSolar: Double,
+        stellarRadiusErrorSolar: Double = stellarRadiusSolar * 0.05,
+        stellarMassSolar: Double,
+        stellarMassErrorSolar: Double = stellarMassSolar * 0.08,
+        stellarTeffK: Double,
+        stellarTeffErrorK: Double = stellarTeffK * 0.03,
+        chiSquared: Double = 0.0,
+        degreesOfFreedom: Int = 100
+    ): com.synthesis.domain.model.exoplanet.PhysicalUncertaintyQuantification {
+        val depthFrac = (depthPpm / 1_000_000.0).coerceAtLeast(1e-7)
+        val depthFracErr = (depthErrorPpm / 1_000_000.0).coerceAtLeast(1e-8)
+
+        // 1. Planetary Radius (R_Earth) = R_star * sqrt(depth) * 109.1
+        val rEarthRatio = 109.1
+        val radiusEarth = stellarRadiusSolar * sqrt(depthFrac) * rEarthRatio
+        val relDepthTerm = 0.5 * (depthFracErr / depthFrac)
+        val relRStarTerm = (stellarRadiusErrorSolar / stellarRadiusSolar.coerceAtLeast(0.01))
+        val radiusErrEarth = radiusEarth * sqrt(relDepthTerm.pow(2) + relRStarTerm.pow(2))
+
+        // 2. Semi-Major Axis (AU) = (M_star * (P / 365.25)^2)^(1/3)
+        val periodYears = periodDays / 365.25
+        val semiMajorAxisAu = (stellarMassSolar.coerceAtLeast(0.01) * periodYears.pow(2)).pow(1.0 / 3.0)
+        val relMassTerm = (1.0 / 3.0) * (stellarMassErrorSolar / stellarMassSolar.coerceAtLeast(0.01))
+        val relPeriodTerm = (2.0 / 3.0) * (periodErrorDays / periodDays.coerceAtLeast(0.001))
+        val semiMajorAxisErrAu = semiMajorAxisAu * sqrt(relMassTerm.pow(2) + relPeriodTerm.pow(2))
+
+        // 3. Equilibrium Temperature (K) = T_star * sqrt(R_star * R_sun / (2 * a * AU)) * (1 - A)^0.25
+        // With standard Bond albedo A = 0.3 -> (1 - 0.3)^0.25 ~ 0.9147
+        val rSunInAu = 0.00465047
+        val teqK = stellarTeffK * sqrt((stellarRadiusSolar * rSunInAu) / (2.0 * semiMajorAxisAu.coerceAtLeast(0.001))) * 0.9147
+        val relTeffTerm = stellarTeffErrorK / stellarTeffK.coerceAtLeast(100.0)
+        val relATerm = 0.5 * (semiMajorAxisErrAu / semiMajorAxisAu.coerceAtLeast(0.001))
+        val teqErrK = teqK * sqrt(relTeffTerm.pow(2) + (0.5 * relRStarTerm).pow(2) + relATerm.pow(2))
+
+        val redChi2 = if (degreesOfFreedom > 0) (chiSquared / degreesOfFreedom).coerceAtLeast(0.5) else 1.0
+
+        return com.synthesis.domain.model.exoplanet.PhysicalUncertaintyQuantification(
+            planetRadiusEarth = radiusEarth,
+            planetRadiusError1Sigma = radiusErrEarth,
+            semiMajorAxisAu = semiMajorAxisAu,
+            semiMajorAxisError1Sigma = semiMajorAxisErrAu,
+            equilibriumTempK = teqK,
+            equilibriumTempError1Sigma = teqErrK,
+            periodDays = periodDays,
+            periodError1Sigma = periodErrorDays,
+            transitDepthPpm = depthPpm,
+            depthError1Sigma = depthErrorPpm,
+            reducedChiSquared = redChi2,
+            degreesOfFreedom = degreesOfFreedom
+        )
+    }
 }

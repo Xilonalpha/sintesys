@@ -10,6 +10,9 @@ interface XilonDiscoveryDao {
     @Query("SELECT * FROM xilon_discoveries ORDER BY scannedAt DESC")
     fun getAllDiscoveries(): Flow<List<XilonDiscoveryEntity>>
 
+    @Query("SELECT * FROM xilon_discoveries ORDER BY scannedAt DESC")
+    suspend fun getDiscoveriesList(): List<XilonDiscoveryEntity>
+
     @Query("SELECT * FROM xilon_discoveries WHERE ticId = :ticId LIMIT 1")
     suspend fun getByTicId(ticId: String): XilonDiscoveryEntity?
 

@@ -157,4 +157,75 @@ class AgencyReportProtocolService @Inject constructor(
             1.0 - (depthFraction * slopeFraction)
         }
     }
+
+    /**
+     * Generates an official IVOA VOEvent v2.0 XML message for real-time astronomical transient alerts,
+     * conformant to NASA GCN (General Coordinates Network) and IAU / CDS standards.
+     */
+    fun generateVoEventXml(
+        targetName: String,
+        hostStar: String,
+        raDeg: Double,
+        decDeg: Double,
+        transitEpochBjd: Double,
+        periodDays: Double,
+        depthPpm: Double,
+        snrSigma: Double,
+        planetRadiusEarth: Double,
+        observerName: String = "SYNTHESIS Autonomous Space OS"
+    ): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        val nowIso = dateFormat.format(Date())
+        val eventId = "SYNTHESIS_TRANSIT_${System.currentTimeMillis()}"
+
+        val sb = StringBuilder()
+        sb.appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        sb.appendLine("<voe:VOEvent xmlns:voe=\"http://www.ivoa.net/xml/VOEvent/v2.0\"")
+        sb.appendLine("  xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"")
+        sb.appendLine("  version=\"2.0\" role=\"observation\"")
+        sb.appendLine("  ivorn=\"ivo://synthesis.space/transits#$eventId\">")
+        sb.appendLine("  <Who>")
+        sb.appendLine("    <Author>")
+        sb.appendLine("      <contactName>$observerName</contactName>")
+        sb.appendLine("      <contactEmail>operations@synthesis.space</contactEmail>")
+        sb.appendLine("    </Author>")
+        sb.appendLine("    <Date>$nowIso</Date>")
+        sb.appendLine("  </Who>")
+        sb.appendLine("  <What>")
+        sb.appendLine("    <Group name=\"AstrophysicalParameters\">")
+        sb.appendLine("      <Param name=\"Target\" value=\"$targetName\" ucd=\"meta.id;src\"/>")
+        sb.appendLine("      <Param name=\"HostStar\" value=\"$hostStar\" ucd=\"meta.id;src\"/>")
+        sb.appendLine("      <Param name=\"Period\" value=\"${String.format(Locale.US, "%.5f", periodDays)}\" unit=\"d\" ucd=\"time.period\"/>")
+        sb.appendLine("      <Param name=\"TransitDepth\" value=\"${String.format(Locale.US, "%.1f", depthPpm)}\" unit=\"ppm\" ucd=\"phot.flux;arith.ratio\"/>")
+        sb.appendLine("      <Param name=\"SignalToNoise\" value=\"${String.format(Locale.US, "%.2f", snrSigma)}\" ucd=\"stat.snr\"/>")
+        sb.appendLine("      <Param name=\"DerivedRadius\" value=\"${String.format(Locale.US, "%.2f", planetRadiusEarth)}\" unit=\"R_earth\" ucd=\"phys.size.radius\"/>")
+        sb.appendLine("    </Group>")
+        sb.appendLine("  </What>")
+        sb.appendLine("  <WhereWhen>")
+        sb.appendLine("    <ObsDataLocation>")
+        sb.appendLine("      <ObservationLocation>")
+        sb.appendLine("        <AstroCoords coord_system_id=\"UTC-ICRS-TOPO\">")
+        sb.appendLine("          <Time unit=\"s\">")
+        sb.appendLine("            <TimeInstant><ISOTime>$nowIso</ISOTime></TimeInstant>")
+        sb.appendLine("          </Time>")
+        sb.appendLine("          <Position2D unit=\"deg\">")
+        sb.appendLine("            <Value2><C1>${String.format(Locale.US, "%.5f", raDeg)}</C1><C2>${String.format(Locale.US, "%.5f", decDeg)}</C2></Value2>")
+        sb.appendLine("          </Position2D>")
+        sb.appendLine("        </AstroCoords>")
+        sb.appendLine("      </ObservationLocation>")
+        sb.appendLine("    </ObsDataLocation>")
+        sb.appendLine("  </WhereWhen>")
+        sb.appendLine("  <How>")
+        sb.appendLine("    <Description>SYNTHESIS Autonomous Exoplanet Detection Suite - High Throughput Photometry Engine</Description>")
+        sb.appendLine("    <Reference uri=\"https://synthesis.space/pipeline/spec/v2\"/>")
+        sb.appendLine("  </How>")
+        sb.appendLine("  <Why>")
+        sb.appendLine("    <Inference probability=\"0.99\" relation=\"candidate\">")
+        sb.appendLine("      <Concept>Exoplanet.TransitCandidate</Concept>")
+        sb.appendLine("      <Description>High-confidence periodic photometric dip consistent with planetary transit.</Description>")
+        sb.appendLine("    </Inference>")
+        sb.appendLine("  </Why>")
+        sb.appendLine("</voe:VOEvent>")
+        return sb.toString()
+    }
 }

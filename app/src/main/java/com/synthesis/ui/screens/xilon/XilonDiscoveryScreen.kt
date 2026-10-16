@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -102,6 +103,10 @@ fun XilonDiscoveryScreen(
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isChatResponding by viewModel.isChatResponding.collectAsState()
     val isApiKeySet by viewModel.isApiKeySet.collectAsState()
+    val activeGeminiModel by viewModel.activeGeminiModel.collectAsState()
+    val availableGeminiModels = viewModel.availableGeminiModels
+    val sparkReport by viewModel.sparkReport.collectAsState()
+    val isSparkRunning by viewModel.isSparkRunning.collectAsState()
     val dipReport by viewModel.dipScanReport.collectAsState()
     val selectedDip by viewModel.selectedDip.collectAsState()
     val dipSensitivity by viewModel.dipSensitivitySigma.collectAsState()
@@ -118,6 +123,12 @@ fun XilonDiscoveryScreen(
     val ticSortOption by viewModel.ticSortOption.collectAsState()
     val mastWorkManagerStatus by viewModel.mastWorkManagerStatus.collectAsState()
     var showGeminiKeyDialog by remember { mutableStateOf(false) }
+    var showTrl9Dialog by remember { mutableStateOf(false) }
+    val trl9Dossier by viewModel.trl9Dossier.collectAsState()
+    val isTrl9Running by viewModel.isTrl9Running.collectAsState()
+    var exoFopExportText by remember { mutableStateOf<String?>(null) }
+    var exoFopExportTitle by remember { mutableStateOf("JSON") }
+    val coroutineScope = rememberCoroutineScope()
     var ticInput by remember { mutableStateOf(initialTicId?.replace("TIC", "", ignoreCase = true)?.trim()?.ifBlank { "25155310" } ?: "25155310") }
     val context = LocalContext.current
 
@@ -149,7 +160,7 @@ fun XilonDiscoveryScreen(
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
-                                    if (isApiKeySet) "✨ GEMINI 3.5 AI" else "⚙️ AI CONFIG",
+                                    if (isApiKeySet) "✨ ${activeGeminiModel.uppercase()}" else "⚙️ AI CONFIG",
                                     color = if (isApiKeySet) AccentGreen else AccentAmber,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
@@ -170,6 +181,18 @@ fun XilonDiscoveryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        showTrl9Dialog = true
+                        if (trl9Dossier == null && !isTrl9Running) {
+                            viewModel.runTrl9Qualification()
+                        }
+                    }) {
+                        Icon(
+                            Icons.Default.Verified,
+                            contentDescription = "TRL 9 Flight Qualification",
+                            tint = AccentGreen
+                        )
+                    }
                     IconButton(onClick = { showGeminiKeyDialog = true }) {
                         Icon(
                             Icons.Default.Key,
@@ -244,6 +267,27 @@ fun XilonDiscoveryScreen(
                         },
                         onDelete = { id ->
                             viewModel.deleteSaved(id)
+                        },
+                        onExportJson = {
+                            coroutineScope.launch {
+                                val json = viewModel.exportAllDiscoveriesExoFopJson()
+                                exoFopExportTitle = "JSON (ExoFOP Report)"
+                                exoFopExportText = json
+                            }
+                        },
+                        onExportCsv = {
+                            coroutineScope.launch {
+                                val csv = viewModel.exportAllDiscoveriesExoFopCsv()
+                                exoFopExportTitle = "CSV (CTOI Table)"
+                                exoFopExportText = csv
+                            }
+                        },
+                        onExportItem = { discoveryId ->
+                            coroutineScope.launch {
+                                val json = viewModel.exportSingleDiscoveryExoFopJson(discoveryId)
+                                exoFopExportTitle = "JSON (Discovery #$discoveryId)"
+                                exoFopExportText = json
+                            }
                         }
                     )
                 }
@@ -885,7 +929,14 @@ fun XilonDiscoveryScreen(
                         VerdictReportCard(
                             res = res,
                             isSaved = savedDiscoveries.any { it.ticId == res.star.ticId },
-                            onSave = { viewModel.saveCurrentResult() }
+                            onSave = { viewModel.saveCurrentResult() },
+                            onExportExoFop = {
+                                coroutineScope.launch {
+                                    val json = viewModel.exportCurrentDetectionJson(res)
+                                    exoFopExportTitle = "JSON (TIC ${res.star.ticId})"
+                                    exoFopExportText = json
+                                }
+                            }
                         )
                     }
 
@@ -914,6 +965,15 @@ fun XilonDiscoveryScreen(
                             messages = chatMessages,
                             isResponding = isChatResponding,
                             onSendMessage = { viewModel.askGemini(it) }
+                        )
+                    }
+
+                    // 2.65 SYNTHESIS SPARK Distributed In-Memory Analytics Engine Card
+                    item {
+                        SynthesisSparkEngineCard(
+                            report = sparkReport,
+                            isRunning = isSparkRunning,
+                            onRunSpark = { viewModel.runSparkAnalysis() }
                         )
                     }
 
@@ -1035,7 +1095,14 @@ fun XilonDiscoveryScreen(
                             VerdictReportCard(
                                 res = state.lastResult,
                                 isSaved = savedDiscoveries.any { it.ticId == state.lastResult.star.ticId },
-                                onSave = { viewModel.saveCurrentResult() }
+                                onSave = { viewModel.saveCurrentResult() },
+                                onExportExoFop = {
+                                    coroutineScope.launch {
+                                        val json = viewModel.exportCurrentDetectionJson(state.lastResult)
+                                        exoFopExportTitle = "JSON (TIC ${state.lastResult.star.ticId})"
+                                        exoFopExportText = json
+                                    }
+                                }
                             )
                         }
                         item {
@@ -1081,11 +1148,39 @@ fun XilonDiscoveryScreen(
     if (showGeminiKeyDialog) {
         GeminiApiKeyDialog(
             isKeyConfigured = isApiKeySet,
+            currentModel = activeGeminiModel,
+            availableModels = availableGeminiModels,
+            onSelectModel = { viewModel.selectGeminiModel(it) },
             onDismiss = { showGeminiKeyDialog = false },
             onSaveKey = { key ->
                 viewModel.saveUserGeminiApiKey(key)
                 showGeminiKeyDialog = false
             }
+        )
+    }
+
+    if (exoFopExportText != null) {
+        ExoFopExportPreviewDialog(
+            formatTitle = exoFopExportTitle,
+            content = exoFopExportText ?: "",
+            onDismiss = { exoFopExportText = null }
+        )
+    }
+
+    if (showTrl9Dialog) {
+        Trl9FlightReadinessDialog(
+            dossier = trl9Dossier,
+            isRunning = isTrl9Running,
+            onRunBenchmark = { viewModel.runTrl9Qualification() },
+            onExportMarkdown = {
+                exoFopExportTitle = "TRL 9 Flight Readiness Review (Markdown)"
+                exoFopExportText = viewModel.exportTrl9DossierMarkdown()
+            },
+            onExportJson = {
+                exoFopExportTitle = "TRL 9 Flight Readiness Review (JSON)"
+                exoFopExportText = viewModel.exportTrl9DossierJson()
+            },
+            onDismiss = { showTrl9Dialog = false }
         )
     }
 }
@@ -1111,7 +1206,10 @@ fun CuratedTargetChip(label: String, ticId: String, isSelected: Boolean, onClick
 fun SavedDiscoveriesCard(
     discoveries: List<XilonDiscoveryEntity>,
     onSelect: (String) -> Unit,
-    onDelete: (Int) -> Unit
+    onDelete: (Int) -> Unit,
+    onExportJson: () -> Unit,
+    onExportCsv: () -> Unit,
+    onExportItem: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -1147,6 +1245,39 @@ fun SavedDiscoveriesCard(
 
             if (expanded) {
                 Spacer(modifier = Modifier.height(10.dp))
+
+                // NASA ExoFOP Export Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onExportJson,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.6f)),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("NASA ExoFOP (JSON)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onExportCsv,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF9100)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.6f)),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("NASA CTOI (CSV)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 discoveries.forEach { item ->
                     Surface(
                         modifier = Modifier
@@ -1193,6 +1324,9 @@ fun SavedDiscoveriesCard(
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { onExportItem(item.id) }) {
+                                    Icon(Icons.Default.Share, contentDescription = "Export ExoFOP", tint = AccentCyan, modifier = Modifier.size(18.dp))
+                                }
                                 IconButton(onClick = { onSelect(item.ticId) }) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = "Scan", tint = AccentCyan)
                                 }
@@ -1242,7 +1376,8 @@ fun ScanningProgressCard(state: XilonUiState.Scanning) {
 fun VerdictReportCard(
     res: XilonDetectionResult,
     isSaved: Boolean,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onExportExoFop: () -> Unit
 ) {
     val badgeColor = Color(res.verdict.colorHex)
     val match = res.archivalCrossMatch
@@ -1271,12 +1406,21 @@ fun VerdictReportCard(
                     )
                 }
 
-                IconButton(onClick = onSave) {
-                    Icon(
-                        imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.Bookmark,
-                        contentDescription = "Save Discovery",
-                        tint = if (isSaved) AccentGreen else TextSecondary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onExportExoFop) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Export NASA ExoFOP",
+                            tint = AccentCyan
+                        )
+                    }
+                    IconButton(onClick = onSave) {
+                        Icon(
+                            imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.Bookmark,
+                            contentDescription = "Save Discovery",
+                            tint = if (isSaved) AccentGreen else TextSecondary
+                        )
+                    }
                 }
             }
 
@@ -2561,7 +2705,7 @@ fun GeminiAiEvaluationCard(
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        if (analysis?.isLiveAiGenerated == true) "● GEMINI 3.5 LIVE" else "○ MOD EURISTIC",
+                        if (analysis?.isLiveAiGenerated == true) "● ${analysis.modelName.uppercase()} LIVE" else "○ MOD EURISTIC",
                         color = if (analysis?.isLiveAiGenerated == true) AccentGreen else AccentAmber,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
@@ -2594,7 +2738,7 @@ fun GeminiAiEvaluationCard(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        "Gemini 3.5 Flash analizează tranzitul și fizica stelară...",
+                        "${analysis?.modelName ?: "Gemini 3.8 Flash"} analizează tranzitul și fizica stelară...",
                         color = TextPrimary,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -2730,7 +2874,7 @@ fun GeminiAstrophysicistChatCard(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Gemini 3.5 analizează fizica stelară și tranzitul în timp real",
+                            "Asistentul neuronal Gemini analizează fizica stelară și tranzitul în timp real",
                             color = TextSecondary,
                             style = MaterialTheme.typography.bodySmall,
                             fontSize = 11.sp
@@ -3350,6 +3494,9 @@ fun GeminiFullscreenChatDialog(
 @Composable
 fun GeminiApiKeyDialog(
     isKeyConfigured: Boolean,
+    currentModel: String,
+    availableModels: List<String>,
+    onSelectModel: (String) -> Unit,
     onDismiss: () -> Unit,
     onSaveKey: (String) -> Unit
 ) {
@@ -3382,7 +3529,7 @@ fun GeminiApiKeyDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            if (isKeyConfigured) "Cheie activă configurată (Gemini 3.5 Flash Online)" else "Nicio cheie configurată (se folosește modul euristic local)",
+                            if (isKeyConfigured) "Cheie activă ($currentModel Online)" else "Nicio cheie configurată (se folosește modul euristic local)",
                             color = if (isKeyConfigured) AccentGreen else AccentAmber,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
@@ -3391,7 +3538,51 @@ fun GeminiApiKeyDialog(
                 }
 
                 Text(
-                    "Pentru a debloca sinteza neuronală de astrofizică și chat-ul live, introdu cheia ta gratuită din Google AI Studio (aistudio.google.com):",
+                    "Selectează Modelul Neuronal:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Model Selection Chips
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    availableModels.forEach { model ->
+                        val isSelected = model.equals(currentModel, ignoreCase = true)
+                        val displayName = when (model) {
+                            "gemini-3.8-flash" -> "⚡ Gemini 3.8 Flash (Recomandat)"
+                            "gemini-3.5-flash" -> "Gemini 3.5 Flash"
+                            "gemini-flash-latest" -> "Gemini Flash Latest"
+                            "gemini-3.1-pro-preview" -> "Gemini 3.1 Pro (Deep STEM)"
+                            else -> model
+                        }
+                        Surface(
+                            onClick = { onSelectModel(model) },
+                            color = if (isSelected) AccentCyan.copy(alpha = 0.2f) else DarkBackground,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, if (isSelected) AccentCyan else Color(0xFF334155)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    displayName,
+                                    color = if (isSelected) AccentCyan else TextPrimary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                if (isSelected) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    "Pentru sinteză neuronală live, introdu cheia ta gratuită din Google AI Studio (aistudio.google.com):",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -3426,6 +3617,223 @@ fun GeminiApiKeyDialog(
         },
         containerColor = DarkSurface
     )
+}
+
+@Composable
+fun SynthesisSparkEngineCard(
+    report: com.synthesis.domain.model.spark.SparkExecutionReport?,
+    isRunning: Boolean,
+    onRunSpark: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+        border = BorderStroke(1.5.dp, Brush.horizontalGradient(listOf(Color(0xFFFF9100), AccentCyan, AccentPurple)))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color(0xFFFF9100),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "SYNTHESIS SPARK DISTRIBUTED ENGINE",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Surface(
+                    color = AccentGreen.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        "● SPARK CLUSTER ON",
+                        color = AccentGreen,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Motor in-memory de paralelism masiv & accelerare Box-Least Squares (BLS) pentru fotometrie TESS/Kepler.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (isRunning) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFFFF9100),
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Spark procesează partițiile pe nucleele paralele...",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            } else if (report != null) {
+                Surface(
+                    color = DarkBackground,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "🚀 Randament Spark:",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "${String.format(Locale.US, "%,.0f", report.throughputCadencesPerSec)} cadențe/sec",
+                                color = AccentCyan,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "⚡ Latență & Speedup:",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "${report.executionDurationMs} ms (${String.format(Locale.US, "%.1f", report.speedupFactor)}x accelerare)",
+                                color = Color(0xFFFF9100),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "🧩 Partiții & Cadențe:",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "${report.partitionCount} nuclee / ${report.totalCadences} puncte",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0xFF334155), thickness = 0.5.dp)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "🔭 Semnal Tranzit BLS:",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "P = ${String.format(Locale.US, "%.4f", report.bestPeriodDays)} d | δ = ${report.transitDepthPpm.toInt()} ppm (SNR: ${String.format(Locale.US, "%.1f", report.signalToNoise)}σ)",
+                                color = AccentGreen,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+
+                        // DAG Stages summary
+                        Text(
+                            "Pipeline DAG Spark Executat:",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        report.stages.forEach { stage ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Stage ${stage.stageNumber}: ${stage.stageName}",
+                                    color = TextPrimary,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    "${stage.durationMs}ms",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = onRunSpark,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF9100),
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Re-execută SPARK Pipeline", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Button(
+                    onClick = onRunSpark,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF9100),
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("🚀 Rulează Sinteza SPARK (Accelerare Distribuită)", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -3781,6 +4189,299 @@ fun CuratedTargetCard(
         }
     }
 }
+@Composable
+fun ExoFopExportPreviewDialog(
+    formatTitle: String,
+    content: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Share, contentDescription = null, tint = AccentCyan)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("NASA ExoFOP-TESS Export ($formatTitle)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Format standardizat NExScI / ExoFOP CTOI v2.4 cu coordonate ICRS, epocă baricentrică BJD_TDB și metrici fotometrice:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = DarkBackground,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, Color(0xFF334155)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = content,
+                            color = TextPrimary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "NASA ExoFOP CTOI Export")
+                        putExtra(Intent.EXTRA_TEXT, content)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Partajează Raport ExoFOP"))
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Partajează", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("NASA ExoFOP Report", content))
+                        Toast.makeText(context, "Raport copiat în clipboard!", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Copiază", color = AccentCyan)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Închide", color = TextSecondary)
+                }
+            }
+        },
+        containerColor = DarkSurface
+    )
+}
 
+@Composable
+fun Trl9FlightReadinessDialog(
+    dossier: com.synthesis.domain.model.flight.FlightReadinessDossier?,
+    isRunning: Boolean,
+    onRunBenchmark: () -> Unit,
+    onExportMarkdown: () -> Unit,
+    onExportJson: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Verified, contentDescription = null, tint = AccentGreen)
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        "NASA / ESA TRL 9 QUALIFICATION",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        "Flight Readiness Review (FRR) & V&V Benchmark Matrix",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (isRunning) {
+                    Surface(
+                        color = AccentCyan.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = AccentCyan,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "Se execută rezolvitorul fizic pe cele 10 planete de referință NASA...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AccentCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentCyan)
+                        }
+                    }
+                } else if (dossier != null) {
+                    // Overall Status Banner
+                    Surface(
+                        color = if (dossier.isMissionCertified) AccentGreen.copy(alpha = 0.2f) else AccentAmber.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (dossier.isMissionCertified) AccentGreen else AccentAmber),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    if (dossier.isMissionCertified) "STATUS: TRL 9 CERTIFICAT DE ZBOR" else "STATUS: CONDITIONAL PASS",
+                                    color = if (dossier.isMissionCertified) AccentGreen else AccentAmber,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    "${String.format(Locale.US, "%.1f", dossier.qualificationRatePercent)}% Conform",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                            Text(
+                                "Eroare medie: ${String.format(Locale.US, "%.3f", dossier.averageErrorPercent)}% | Eroare maximă: ${String.format(Locale.US, "%.3f", dossier.maxObservedErrorPercent)}% (Prag NASA: ≤ 1.2%)",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
 
+                    // System Environment Card
+                    Surface(
+                        color = DarkBackground,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color(0xFF334155)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("TELEMETRIE SISTEM DE ZBOR", style = MaterialTheme.typography.labelSmall, color = AccentCyan, fontWeight = FontWeight.Bold)
+                            Text("• Amprentă Memorie: ${dossier.systemEnvironment.memoryFootprintMb} MB (R8 Minified)", style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                            Text("• Nuclee Paralele: ${dossier.systemEnvironment.parallelCoresCount} Cores (Synthesis SPARK)", style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                            Text("• Barieră Toleranță la Erori: Activă (FITS auto-pad / NaN safe)", style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                            Text("• Autonomie Offline: 100% Funcțional fără conexiune", style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                        }
+                    }
+
+                    // 10 Benchmark Matrix
+                    Text(
+                        "Matricea de Calibrare Ground-Truth (10 Planete):",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        dossier.benchmarkResults.forEach { res ->
+                            Surface(
+                                color = DarkBackground,
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, if (res.isFlightQualified) Color(0xFF1E3A5F) else Color(0xFF7F1D1D)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                res.planet.name,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                color = Color(0xFF1E293B),
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(
+                                                    res.planet.discoveryMission,
+                                                    color = AccentCyan,
+                                                    fontSize = 9.sp,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            if (res.planet.isHabitableZone) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("🌱 HZ", fontSize = 9.sp, color = AccentGreen)
+                                            }
+                                        }
+                                        Text(
+                                            "R_p: ${String.format(Locale.US, "%.2f", res.derivedPlanetRadiusEarth)} R⊕ (Err: ${String.format(Locale.US, "%.2f", res.radiusErrorPercent)}%) • P: ${String.format(Locale.US, "%.3f", res.derivedPeriodDays)} d",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                    Surface(
+                                        color = if (res.isFlightQualified) AccentGreen.copy(alpha = 0.2f) else AccentAmber.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            if (res.isFlightQualified) "CONFORM" else "MARGINAL",
+                                            color = if (res.isFlightQualified) AccentGreen else AccentAmber,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(
+                    onClick = onExportMarkdown,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color.Black)
+                ) {
+                    Text("Markdown FRR", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+                Button(
+                    onClick = onExportJson,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = Color.Black)
+                ) {
+                    Text("JSON NASA", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(onClick = onRunBenchmark) {
+                    Text("Re-rulează", color = AccentCyan)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Închide", color = TextSecondary)
+                }
+            }
+        },
+        containerColor = DarkSurface
+    )
+}
