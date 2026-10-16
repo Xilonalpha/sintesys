@@ -445,8 +445,8 @@ class PureTicCatalogRepository @Inject constructor(
         ),
         PureTicCandidate(
             ticId = "123891044",
-            name = "TIC 123891044 (Sector 75 Resonant Pair)",
-            sector = "Sector 75 (s0075)",
+            name = "TIC 123891044 (Sector 6 & 33 Resonant Pair)",
+            sector = "Sector 6 / 33 (s0006, s0033)",
             apparentMag = 12.10,
             estimatedPeriodDays = 7.15,
             transitDurationHours = 2.8,

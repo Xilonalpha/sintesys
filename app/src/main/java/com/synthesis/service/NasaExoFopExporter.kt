@@ -446,6 +446,7 @@ class NasaExoFopExporter @Inject constructor(
             "268301217" -> Pair(117.7583, -64.6147) // TOI-2076
             "167418703" -> Pair(108.2341, -73.1256)
             "141913165" -> Pair(84.1205, -61.2184)
+            "123891044" -> Pair(103.5412, -8.8524) // Monoceros (Sectors 6, 33, 87)
             "25155310"  -> Pair(142.1584, 18.2351)
             else -> {
                 val seed = abs(cleanTic.hashCode())
