@@ -65,6 +65,7 @@ class XilonViewModel @Inject constructor(
     val nasaExoFopExporter: com.synthesis.service.NasaExoFopExporter,
     val missionFlightBenchmarkEngine: com.synthesis.engine.flight.MissionFlightBenchmarkEngine,
     val flightReadinessDossierExporter: com.synthesis.service.FlightReadinessDossierExporter,
+    val validationEngine: com.synthesis.engine.validation.TessHeasarcValidationEngine,
     private val tessMastPollingWorkManager: com.synthesis.service.worker.TessMastPollingWorkManager,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
@@ -338,6 +339,10 @@ class XilonViewModel @Inject constructor(
     suspend fun exportCurrentDetectionJson(res: com.synthesis.domain.model.xilon.XilonDetectionResult): String = nasaExoFopExporter.exportDetectionResultJson(res)
 
     suspend fun exportCurrentDetectionCsv(res: com.synthesis.domain.model.xilon.XilonDetectionResult): String = nasaExoFopExporter.exportDetectionResultCsv(res)
+
+    fun validateCandidate(res: com.synthesis.domain.model.xilon.XilonDetectionResult): com.synthesis.domain.model.validation.PreReportValidationDossier {
+        return validationEngine.validateCandidate(res)
+    }
 
     fun runScan(ticIdInput: String, periodDaysInput: Double? = null) {
         val cleanTic = ticIdInput.trim().replace("TIC", "", ignoreCase = true).trim()

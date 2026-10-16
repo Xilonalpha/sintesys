@@ -39,7 +39,8 @@ class NasaExoFopExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val xilonDiscoveryDao: XilonDiscoveryDao,
     private val pureTicDao: PureTicDao,
-    private val astrometryEngine: AstrometryEngine
+    private val astrometryEngine: AstrometryEngine,
+    val validationEngine: com.synthesis.engine.validation.TessHeasarcValidationEngine
 ) {
 
     private val gson: Gson = GsonBuilder()
@@ -292,10 +293,28 @@ class NasaExoFopExporter @Inject constructor(
             else -> "AMB" // Ambiguous
         }
 
+        // 7. Cross-reference with HEASARC TESS-point Validation Engine
+        val pointingAudit = validationEngine.auditTessPointing(
+            ticId = entity.ticId,
+            raDeg = raDeg,
+            decDeg = decDeg,
+            claimedSectorStr = entity.sector
+        )
+        val sanitizedSector = if (pointingAudit.pointingMismatchFlag) {
+            pointingAudit.suggestedCorrectSector
+        } else {
+            entity.sector
+        }
+        val validatedNotes = if (pointingAudit.pointingMismatchFlag) {
+            "${entity.notes ?: entity.verdictSummary} | [HEASARC VALIDATED: Sector corrected from ${entity.sector} to $sanitizedSector]"
+        } else {
+            entity.notes ?: entity.verdictSummary
+        }
+
         ExoFopCtoiRecord(
             ticId = cleanTicLong,
             targetName = entity.canonicalName.ifBlank { "TIC $cleanTicLong" },
-            sector = entity.sector,
+            sector = sanitizedSector,
             raDeg = raDeg,
             decDeg = decDeg,
             raSexagesimal = raSexagesimal,
@@ -322,7 +341,7 @@ class NasaExoFopExporter @Inject constructor(
             ctoiDisposition = ctoiDisposition,
             verdictTitle = entity.verdictTitle,
             archivalStatus = entity.archivalStatus,
-            notes = entity.notes ?: entity.verdictSummary,
+            notes = validatedNotes,
             exportTimestampUtc = getUtcTimestampIso()
         )
     }

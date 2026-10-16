@@ -26,6 +26,13 @@ class AstrometryEngine @Inject constructor() {
         val formattedB: String
     )
 
+    data class EclipticCoordinates(
+        val lambdaDeg: Double, // Ecliptic Longitude [0..360)
+        val betaDeg: Double,   // Ecliptic Latitude [-90..+90]
+        val formattedLambda: String,
+        val formattedBeta: String
+    )
+
     data class AstrometricTargetDossier(
         val raDeg: Double,
         val decDeg: Double,
@@ -79,6 +86,38 @@ class AstrometryEngine @Inject constructor() {
             bDeg = bDeg,
             formattedL = formattedL,
             formattedB = formattedB
+        )
+    }
+
+    /**
+     * Converts Equatorial coordinates (RA, Dec in degrees) into Ecliptic coordinates (λ, β).
+     * Standard J2000 transformation using true obliquity of the ecliptic ε = 23.4392911°.
+     */
+    fun equatorialToEcliptic(raDeg: Double, decDeg: Double): EclipticCoordinates {
+        val epsRad = Math.toRadians(23.4392911)
+        val raRad = Math.toRadians(raDeg)
+        val decRad = Math.toRadians(decDeg)
+
+        // sin(β) = sin(δ) cos(ε) - cos(δ) sin(ε) sin(α)
+        val sinBeta = sin(decRad) * cos(epsRad) - cos(decRad) * sin(epsRad) * sin(raRad)
+        val betaRad = asin(sinBeta.coerceIn(-1.0, 1.0))
+        val betaDeg = Math.toDegrees(betaRad)
+
+        // y = sin(δ) sin(ε) + cos(δ) cos(ε) sin(α)
+        // x = cos(δ) cos(α)
+        val y = sin(decRad) * sin(epsRad) + cos(decRad) * cos(epsRad) * sin(raRad)
+        val x = cos(decRad) * cos(raRad)
+        var lambdaDeg = Math.toDegrees(atan2(y, x)) % 360.0
+        if (lambdaDeg < 0.0) lambdaDeg += 360.0
+
+        val formattedLambda = String.format(Locale.US, "%.4f°", lambdaDeg)
+        val formattedBeta = String.format(Locale.US, "%+.4f°", betaDeg)
+
+        return EclipticCoordinates(
+            lambdaDeg = lambdaDeg,
+            betaDeg = betaDeg,
+            formattedLambda = formattedLambda,
+            formattedBeta = formattedBeta
         )
     }
 

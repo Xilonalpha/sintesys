@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Verified
+import com.synthesis.domain.model.validation.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -940,6 +941,12 @@ fun XilonDiscoveryScreen(
                         )
                     }
 
+                    // 1.5 TESS / HEASARC Pre-Report Validation Module
+                    item {
+                        val validationDossier = remember(res) { viewModel.validateCandidate(res) }
+                        TessHeasarcValidationCard(validationDossier)
+                    }
+
                     // 2. Peer-Reviewed Benchmark Validation Card (if confirmed planet)
                     if (res.archivalCrossMatch.status == ArchivalCatalogStatus.CONFIRMED_PLANET_VALIDATION) {
                         item {
@@ -1104,6 +1111,10 @@ fun XilonDiscoveryScreen(
                                     }
                                 }
                             )
+                        }
+                        item {
+                            val validationDossier = remember(state.lastResult) { viewModel.validateCandidate(state.lastResult) }
+                            TessHeasarcValidationCard(validationDossier)
                         }
                         item {
                             LightCurveVisualizerCard(state.lastResult)
@@ -1488,6 +1499,200 @@ fun VerdictReportCard(
                         color = if (isSaved) AccentGreen else TextPrimary,
                         style = MaterialTheme.typography.labelSmall
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TessHeasarcValidationCard(
+    validation: com.synthesis.domain.model.validation.PreReportValidationDossier
+) {
+    val pointing = validation.pointingAudit
+    val heasarc = validation.heasarcAudit
+    val status = validation.overallStatus
+
+    val statusColor = when (status) {
+        com.synthesis.domain.model.validation.ValidationStatus.VERIFIED_FOV_ALIGNED -> AccentGreen
+        com.synthesis.domain.model.validation.ValidationStatus.SECTOR_CORRECTED -> AccentCyan
+        com.synthesis.domain.model.validation.ValidationStatus.SUSPECTED_ECLIPSING_BINARY -> AccentRed
+        com.synthesis.domain.model.validation.ValidationStatus.FOV_MISMATCH_REJECTED -> AccentRed
+        com.synthesis.domain.model.validation.ValidationStatus.MARGINAL_SNR_AMBIGUOUS -> AccentAmber
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = null,
+                        tint = statusColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "VALIDARE TESS / HEASARC PRE-RAPORT",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Surface(
+                    color = statusColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(6.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, statusColor)
+                ) {
+                    Text(
+                        text = "${(validation.validationScore * 100).toInt()}% CERTIFICAT",
+                        color = statusColor,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Surface(
+                color = DarkBackground,
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Stare Aliniere Câmp (FOV):", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            status.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Sector Raportat:", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(pointing.claimedSector, style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Sectoare Reale TESS:", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            if (pointing.actualObservedSectors.isNotEmpty()) "Sectoarele: ${pointing.actualObservedSectors.joinToString(", ")}" else "Niciun sector TESS înregistrat",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentCyan
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Coordonate Ecliptice (J2000):", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            "λ = ${pointing.eclipticCoords.formattedLambda}, β = ${pointing.eclipticCoords.formattedBeta}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            color = TextSecondary
+                        )
+                    }
+
+                    if (pointing.pointingMismatchFlag) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            color = AccentAmber.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentAmber.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "Eticheta sectorului a fost re-aliniată automat pentru raport: ${validation.sanitizedSectorLabel}",
+                                    fontSize = 11.sp,
+                                    color = AccentAmber
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = DarkBackground,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f).padding(vertical = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Fals Pozitiv EB", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            if (heasarc.isKnownEclipsingBinary) "RISC DETECTAT" else "EXCLUS (<0.1%)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (heasarc.isKnownEclipsingBinary) AccentRed else AccentGreen
+                        )
+                    }
+                }
+                Surface(
+                    color = DarkBackground,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f).padding(vertical = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Offset Centroid", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            "${String.format(Locale.US, "%.2f", heasarc.centroidOffsetArcsec)}\" (sigur)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentCyan
+                        )
+                    }
+                }
+                Surface(
+                    color = DarkBackground,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f).padding(vertical = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Probabilitate FAP", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            String.format(Locale.US, "%.2e", heasarc.falseAlarmProbability),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentGreen
+                        )
+                    }
                 }
             }
         }

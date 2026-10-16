@@ -122,11 +122,14 @@ class NasaExoFopExporterTest {
             )
         )
 
+        val validationEngine = com.synthesis.engine.validation.TessHeasarcValidationEngine(astrometryEngine)
+
         exporter = NasaExoFopExporter(
             context = dummyContext,
             xilonDiscoveryDao = fakeXilonDao,
             pureTicDao = fakePureTicDao,
-            astrometryEngine = astrometryEngine
+            astrometryEngine = astrometryEngine,
+            validationEngine = validationEngine
         )
     }
 
