@@ -19,21 +19,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
 
-/**
- * NASA ExoFOP-TESS Official Exporter Service Module.
- *
- * Serializes exoplanet candidates and verified planetary signals stored in the
- * 'xilon_discoveries' database table into the official NASA ExoFOP-TESS (TESS Follow-up
- * Observing Program / Community TESS Object of Interest - CTOI) JSON and CSV report specifications.
- *
- * Implements:
- * 1. ICRS Equatorial (J2000) coordinates (decimal degrees & sexagesimal hh:mm:ss.ss, ±dd:mm:ss.s)
- * 2. IAU Galactic coordinates (l, b in degrees)
- * 3. Barycentric Julian Date timing (BJD_TDB) & TESS Barycentric Julian Date (BTJD = BJD - 2457000.0)
- * 4. High-precision photometric depth metrics (ppm, %, flux fraction, SNR sigma)
- * 5. Derived exoplanet physical parameters (Rp in R_Earth & R_Jupiter, Teq, mass, density, gravity)
- * 6. Dual-format serialization: Official ExoFOP CTOI CSV table and hierarchical NExScI JSON schema
- */
 @Singleton
 class NasaExoFopExporter @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -48,9 +33,6 @@ class NasaExoFopExporter @Inject constructor(
         .serializeSpecialFloatingPointValues()
         .create()
 
-    /**
-     * Official ExoFOP CTOI (Community TESS Object of Interest) data record structure.
-     */
     data class ExoFopCtoiRecord(
         val ticId: Long,
         val targetName: String,
@@ -87,9 +69,6 @@ class NasaExoFopExporter @Inject constructor(
         val provenance: String = "SYNTHESIS XILON-SPARK NASA EXOFOP PIPELINE v2.4"
     )
 
-    /**
-     * Hierarchical NASA ExoFOP-TESS JSON Report schema.
-     */
     data class NasaExoFopReport(
         val mission: String = "NASA Transiting Exoplanet Survey Satellite (TESS)",
         val facility: String = "NASA Exoplanet Science Institute (NExScI) / ExoFOP-TESS",
@@ -100,9 +79,6 @@ class NasaExoFopExporter @Inject constructor(
         val discoveries: List<ExoFopCtoiRecord>
     )
 
-    /**
-     * Serializes all discoveries from 'xilon_discoveries' into official NASA ExoFOP-TESS JSON format.
-     */
     suspend fun exportAllDiscoveriesJson(): String = withContext(Dispatchers.IO) {
         val entities = xilonDiscoveryDao.getDiscoveriesList()
         val records = entities.map { convertEntityToCtoiRecord(it) }
@@ -117,18 +93,12 @@ class NasaExoFopExporter @Inject constructor(
         gson.toJson(report)
     }
 
-    /**
-     * Serializes all discoveries from 'xilon_discoveries' into official NASA ExoFOP-TESS CTOI CSV format.
-     */
     suspend fun exportAllDiscoveriesCsv(): String = withContext(Dispatchers.IO) {
         val entities = xilonDiscoveryDao.getDiscoveriesList()
         val records = entities.map { convertEntityToCtoiRecord(it) }
         buildCsvFromRecords(records)
     }
 
-    /**
-     * Serializes a single discovery into official NASA ExoFOP-TESS JSON format.
-     */
     suspend fun exportSingleDiscoveryJson(id: Int): String? = withContext(Dispatchers.IO) {
         val entity = xilonDiscoveryDao.getDiscoveriesList().firstOrNull { it.id == id } ?: return@withContext null
         val record = convertEntityToCtoiRecord(entity)
@@ -140,18 +110,12 @@ class NasaExoFopExporter @Inject constructor(
         gson.toJson(report)
     }
 
-    /**
-     * Serializes a single discovery into official NASA ExoFOP-TESS CTOI CSV format.
-     */
     suspend fun exportSingleDiscoveryCsv(id: Int): String? = withContext(Dispatchers.IO) {
         val entity = xilonDiscoveryDao.getDiscoveriesList().firstOrNull { it.id == id } ?: return@withContext null
         val record = convertEntityToCtoiRecord(entity)
         buildCsvFromRecords(listOf(record))
     }
 
-    /**
-     * Serializes a discovery by TIC ID into official NASA ExoFOP-TESS JSON format.
-     */
     suspend fun exportDiscoveryByTicJson(ticId: String): String? = withContext(Dispatchers.IO) {
         val cleanTic = ticId.replace("TIC", "", ignoreCase = true).trim()
         val entity = xilonDiscoveryDao.getByTicId(cleanTic) ?: return@withContext null
@@ -164,9 +128,6 @@ class NasaExoFopExporter @Inject constructor(
         gson.toJson(report)
     }
 
-    /**
-     * Serializes a discovery by TIC ID into official NASA ExoFOP-TESS CTOI CSV format.
-     */
     suspend fun exportDiscoveryByTicCsv(ticId: String): String? = withContext(Dispatchers.IO) {
         val cleanTic = ticId.replace("TIC", "", ignoreCase = true).trim()
         val entity = xilonDiscoveryDao.getByTicId(cleanTic) ?: return@withContext null
@@ -174,9 +135,6 @@ class NasaExoFopExporter @Inject constructor(
         buildCsvFromRecords(listOf(record))
     }
 
-    /**
-     * Serializes an active [com.synthesis.domain.model.xilon.XilonDetectionResult] directly into official NASA ExoFOP-TESS JSON format.
-     */
     suspend fun exportDetectionResultJson(res: com.synthesis.domain.model.xilon.XilonDetectionResult): String = withContext(Dispatchers.IO) {
         val entity = XilonDiscoveryEntity(
             ticId = res.star.ticId,
@@ -210,9 +168,6 @@ class NasaExoFopExporter @Inject constructor(
         gson.toJson(report)
     }
 
-    /**
-     * Serializes an active [com.synthesis.domain.model.xilon.XilonDetectionResult] directly into official NASA ExoFOP-TESS CTOI CSV format.
-     */
     suspend fun exportDetectionResultCsv(res: com.synthesis.domain.model.xilon.XilonDetectionResult): String = withContext(Dispatchers.IO) {
         val entity = XilonDiscoveryEntity(
             ticId = res.star.ticId,
@@ -241,9 +196,6 @@ class NasaExoFopExporter @Inject constructor(
         buildCsvFromRecords(listOf(record))
     }
 
-    /**
-     * Exports serialized string content to a persistent file in the app storage directory.
-     */
     suspend fun saveReportToFile(content: String, fileName: String): File = withContext(Dispatchers.IO) {
         val exportDir = File(context.filesDir, "exofop_exports").apply {
             if (!exists()) mkdirs()
@@ -253,47 +205,34 @@ class NasaExoFopExporter @Inject constructor(
         targetFile
     }
 
-    /**
-     * Converts an internal [XilonDiscoveryEntity] from Room into an official [ExoFopCtoiRecord].
-     */
     suspend fun convertEntityToCtoiRecord(entity: XilonDiscoveryEntity): ExoFopCtoiRecord = withContext(Dispatchers.IO) {
         val cleanTicLong = entity.ticId.replace("TIC", "", ignoreCase = true).trim().toLongOrNull() ?: 0L
-
-        // 1. Resolve ICRS Coordinates (RA, Dec in decimal degrees)
         val (raDeg, decDeg) = resolveIcrsCoordinates(entity)
         val galactic = astrometryEngine.equatorialToGalactic(raDeg, decDeg)
         val raSexagesimal = astrometryEngine.formatSexagesimalRa(raDeg)
         val decSexagesimal = astrometryEngine.formatSexagesimalDec(decDeg)
 
-        // 2. Resolve Barycentric Transit Timing (BJD_TDB and BTJD)
         val epochBjd = entity.epochBjd ?: astrometryEngine.unixMsToBjdTdb(entity.scannedAt)
         val epochBtjd = epochBjd - 2457000.0
-
-        // 3. Resolve Photometric Depth & Duration Metrics
         val depthPpm = entity.depthPpm
         val depthPercent = depthPpm / 10000.0
         val depthFraction = depthPpm / 1_000_000.0
         val durationDays = entity.durationHours / 24.0
 
-        // 4. Resolve Planetary Dimensions
         val radiusEarth = entity.planetRadiusEarth
         val radiusJupiter = radiusEarth?.div(11.209)
-
-        // 5. Calculate Semi-Major Axis if missing: a = (M* * (P/365.25)^2)^(1/3)
         val semiMajorAu = ((entity.periodDays / 365.25) * (entity.periodDays / 365.25)).let { p2 ->
             Math.cbrt(p2 * 1.0)
         }
 
-        // 6. Map CTOI Disposition
         val ctoiDisposition = when {
-            entity.verdict.contains("CONFIRMED", ignoreCase = true) || entity.archivalStatus.contains("CONFIRMED", ignoreCase = true) -> "KP" // Known Planet
+            entity.verdict.contains("CONFIRMED", ignoreCase = true) || entity.archivalStatus.contains("CONFIRMED", ignoreCase = true) -> "KP"
             entity.verdict.contains("FALSE_POSITIVE", ignoreCase = true) -> "FP"
             entity.verdict.contains("ECLIPSING_BINARY", ignoreCase = true) -> "EB"
-            entity.snr >= 7.1 -> "PC" // Planet Candidate
-            else -> "AMB" // Ambiguous
+            entity.snr >= 7.1 -> "PC"
+            else -> "AMB"
         }
 
-        // 7. Cross-reference with HEASARC TESS-point Validation Engine
         val pointingAudit = validationEngine.auditTessPointing(
             ticId = entity.ticId,
             raDeg = raDeg,
@@ -346,14 +285,10 @@ class NasaExoFopExporter @Inject constructor(
         )
     }
 
-    /**
-     * Builds the official comma-separated NASA ExoFOP-TESS CTOI table.
-     */
     private fun buildCsvFromRecords(records: List<ExoFopCtoiRecord>): String {
         val sb = StringBuilder()
         val nowIso = getUtcTimestampIso()
 
-        // Official ExoFOP header comments
         sb.appendLine("# ==========================================================================================")
         sb.appendLine("# NASA EXOPLANET ARCHIVE / TESS FOLLOW-UP OBSERVING PROGRAM (ExoFOP-TESS)")
         sb.appendLine("# COMMUNITY TESS OBJECT OF INTEREST (CTOI) SUBMISSION TABLE")
@@ -365,7 +300,6 @@ class NasaExoFopExporter @Inject constructor(
         sb.appendLine("# Timing Baseline: Barycentric Julian Date in Barycentric Dynamical Time (BJD_TDB & BTJD)")
         sb.appendLine("# ==========================================================================================")
 
-        // Column Header Row
         sb.appendLine(
             listOf(
                 "TIC_ID",
@@ -401,7 +335,6 @@ class NasaExoFopExporter @Inject constructor(
             ).joinToString(",")
         )
 
-        // Data Rows
         for (r in records) {
             val row = listOf(
                 r.ticId.toString(),
@@ -441,38 +374,27 @@ class NasaExoFopExporter @Inject constructor(
         return sb.toString()
     }
 
-    /**
-     * Resolves ICRS Right Ascension and Declination in decimal degrees.
-     */
     private suspend fun resolveIcrsCoordinates(entity: XilonDiscoveryEntity): Pair<Double, Double> {
         if (entity.raDeg != null && entity.decDeg != null && (abs(entity.raDeg) > 0.0001 || abs(entity.decDeg) > 0.0001)) {
             return Pair(entity.raDeg, entity.decDeg)
         }
 
-        // Try lookup in PureTic catalog
         val cleanTic = entity.ticId.replace("TIC", "", ignoreCase = true).trim()
         val pureStar = pureTicDao.getByTicId(cleanTic)
         if (pureStar != null) {
-            // Coordinate mapping based on target star catalog
-            val pseudoRa = (cleanTic.hashCode().toDouble().let { abs(it % 360000) }) / 1000.0
-            val pseudoDec = (cleanTic.reversed().hashCode().toDouble().let { (it % 160000) - 80000 }) / 1000.0
-            return Pair(pseudoRa, pseudoDec)
+            if (pureStar.ra != null && pureStar.dec != null) {
+                return Pair(pureStar.ra, pureStar.dec)
+            }
         }
 
-        // Known benchmark stellar coordinates
         return when (cleanTic) {
-            "150428135" -> Pair(97.0957, -55.5786) // TOI-700
-            "268301217" -> Pair(117.7583, -64.6147) // TOI-2076
+            "150428135" -> Pair(97.0957, -55.5786)
+            "268301217" -> Pair(117.7583, -64.6147)
             "167418703" -> Pair(108.2341, -73.1256)
             "141913165" -> Pair(84.1205, -61.2184)
-            "123891044" -> Pair(103.5412, -8.8524) // Monoceros (Sectors 6, 33, 87)
-            "25155310"  -> Pair(142.1584, 18.2351)
-            else -> {
-                val seed = abs(cleanTic.hashCode())
-                val ra = (seed % 36000) / 100.0
-                val dec = ((seed / 36000) % 18000 - 9000) / 100.0
-                Pair(ra, dec)
-            }
+            "123891044" -> Pair(103.5412, -8.8524)
+            "25155310" -> Pair(142.1584, 18.2351)
+            else -> Pair(0.0, 0.0)
         }
     }
 
