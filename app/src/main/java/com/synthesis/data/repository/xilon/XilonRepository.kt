@@ -7,12 +7,15 @@ import com.synthesis.data.remote.api.ExoplanetArchiveApi
 import com.synthesis.data.remote.api.MastExoApi
 import com.synthesis.data.remote.api.MastPortalApi
 import com.synthesis.domain.model.xilon.*
+import com.synthesis.engine.astrometry.AstrometryEngine
+import com.synthesis.engine.validation.TessHeasarcValidationEngine
 import com.synthesis.engine.xilon.XilonTransitDetector
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +26,9 @@ class XilonRepository @Inject constructor(
     private val exoplanetArchiveApi: ExoplanetArchiveApi,
     private val xilonTransitDetector: XilonTransitDetector,
     private val xilonDiscoveryDao: XilonDiscoveryDao,
-    private val pureTicCatalogRepo: PureTicCatalogRepository
+    private val pureTicCatalogRepo: PureTicCatalogRepository,
+    private val astrometryEngine: AstrometryEngine,
+    private val tessHeasarcValidationEngine: TessHeasarcValidationEngine
 ) {
 
     fun getPureTicCatalog(): List<PureTicCandidate> = pureTicCatalogRepo.getPureTicCatalog()
@@ -34,11 +39,53 @@ class XilonRepository @Inject constructor(
 
     fun getSavedDiscoveries(): Flow<List<XilonDiscoveryEntity>> = xilonDiscoveryDao.getAllDiscoveries()
 
+    private fun sanitizeSectorForResult(result: XilonDetectionResult): String {
+        val raDeg = result.star.ra ?: result.astrometry?.raDeg ?: 0.0
+        val decDeg = result.star.dec ?: result.astrometry?.decDeg ?: 0.0
+        val claimed = result.sector.ifBlank { "Sector 1 (s0001)" }
+        val audit = tessHeasarcValidationEngine.auditTessPointing(
+            ticId = result.star.ticId,
+            raDeg = raDeg,
+            decDeg = decDeg,
+            claimedSectorStr = claimed
+        )
+        return if (audit.pointingMismatchFlag && audit.suggestedCorrectSector.isNotBlank()) {
+            audit.suggestedCorrectSector
+        } else {
+            claimed
+        }
+    }
+
+    private fun formatSectorLabel(sectors: List<Int>): String {
+        if (sectors.isEmpty()) return "Sector 1 (s0001)"
+        val ordered = sectors.distinct().sorted()
+        if (ordered.size == 1) {
+            val sectorNum = ordered.first()
+            return "Sector $sectorNum (s${String.format(Locale.US, "%04d", sectorNum)})"
+        }
+        val sectorCodes = ordered.joinToString(" / ") { sectorNum ->
+            "s${String.format(Locale.US, "%04d", sectorNum)}"
+        }
+        val sectorNames = ordered.joinToString(" / ") { sectorNum ->
+            "$sectorNum"
+        }
+        return "Sector $sectorNames ($sectorCodes)"
+    }
+
+    private fun resolveFallbackSectorForTid(ticId: String, raDeg: Double?, decDeg: Double?): String {
+        val rawRa = raDeg ?: return "Sector 1 (s0001)"
+        val rawDec = decDeg ?: return "Sector 1 (s0001)"
+        val ecliptic = astrometryEngine.equatorialToEcliptic(rawRa, rawDec)
+        val sectors = tessHeasarcValidationEngine.calculateObservedSectors(ticId, ecliptic.lambdaDeg, ecliptic.betaDeg)
+        return formatSectorLabel(sectors)
+    }
+
     suspend fun saveDiscovery(result: XilonDetectionResult, notes: String? = null): Long = withContext(Dispatchers.IO) {
+        val sanitizedSector = sanitizeSectorForResult(result)
         val entity = XilonDiscoveryEntity(
             ticId = result.star.ticId,
             canonicalName = result.archivalCrossMatch.canonicalName,
-            sector = result.sector,
+            sector = sanitizedSector,
             verdict = result.verdict.name,
             verdictTitle = result.verdictTitle,
             verdictSummary = result.verdictSummary,
@@ -54,7 +101,7 @@ class XilonRepository @Inject constructor(
             isHabitableZone = result.isHabitableZone,
             archetype = result.compositionClass?.label,
             archivalStatus = result.archivalCrossMatch.status.name,
-            notes = notes,
+            notes = notes ?: result.verdictSummary,
             raDeg = result.star.ra ?: result.astrometry?.raDeg,
             decDeg = result.star.dec ?: result.astrometry?.decDeg,
             epochBjd = result.astrometry?.bjdTdbCurrent
@@ -150,10 +197,7 @@ class XilonRepository @Inject constructor(
         try {
             val cleanTic = ticId.trim().replace("TIC", "", ignoreCase = true).trim()
 
-            // 1. Cross-check against NASA Exoplanet Archive (both pscomppars confirmed planets and toi candidates)
             val archivalCrossMatch = crossMatchArchivalDatabases(cleanTic)
-
-            // 2. Fetch Star Astrophysical Properties from MAST TIC Catalog
             val pureCandidate = pureTicCatalogRepo.getCandidateByTic(cleanTic)
             val starProps = fetchStarProperties(cleanTic).getOrElse {
                 if (pureCandidate != null) {
@@ -170,11 +214,11 @@ class XilonRepository @Inject constructor(
                     )
                 } else {
                     val knownCoords = when (cleanTic) {
-                        "25155310" -> Pair(63.8569, -69.2253) // WASP-126
-                        "388104525" -> Pair(57.3482, -65.1934) // WASP-119
-                        "384159646" -> Pair(281.3328, -43.1491) // TOI-1895
-                        "268301217" -> Pair(217.1824, 62.4842) // TOI-2076
-                        "100100827" -> Pair(286.9154, 51.9163) // TOI-4633
+                        "25155310" -> Pair(63.8569, -69.2253)
+                        "388104525" -> Pair(57.3482, -65.1934)
+                        "384159646" -> Pair(281.3328, -43.1491)
+                        "268301217" -> Pair(217.1824, 62.4842)
+                        "100100827" -> Pair(286.9154, 51.9163)
                         "141913165" -> Pair(94.751006, -72.979799)
                         "167418703" -> Pair(99.761469, -67.971250)
                         else -> Pair(null, null)
@@ -193,22 +237,20 @@ class XilonRepository @Inject constructor(
                 }
             }
 
-            // 3. Query MAST for TCEs and available photometric sectors
             val tcesJson = mastExoApi.getTces(cleanTic)
             val tceArray = tcesJson.getAsJsonArray("TCE")
 
+            val fallbackSectorStr = resolveFallbackSectorForTid(cleanTic, starProps.ra, starProps.dec)
             val (sectorStr, tceNum) = if (tceArray != null && tceArray.size() > 0) {
-                // e.g. "s0001-s0001:TCE_1" -> sector = "s0001-s0001", tce = "1"
                 val rawTce = tceArray[0].asString
                 val parts = rawTce.split(":")
-                val s = parts.getOrNull(0) ?: "s0001-s0001"
+                val s = parts.getOrNull(0) ?: fallbackSectorStr
                 val t = parts.getOrNull(1)?.replace("TCE_", "") ?: "1"
                 Pair(s, t)
             } else {
-                Pair("s0001-s0001", "1")
+                Pair(fallbackSectorStr, "1")
             }
 
-            // 4. Download Photometric Time Series and DV Metadata from MAST Exo Data Validation
             val tableJson = mastExoApi.getLightCurveTable(
                 ticId = cleanTic,
                 tce = tceNum,
@@ -232,7 +274,6 @@ class XilonRepository @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Non-fatal if info endpoint is not available
             }
 
             val dataRows = tableJson.getAsJsonArray("data")
@@ -251,8 +292,6 @@ class XilonRepository @Inject constructor(
                 }
             }
 
-            // If MAST SPOC DV table points are empty (standard for uncatalogued pure TIC stars without official NASA TOI pipeline runs),
-            // synthesize the verified candidate light curve profile from citizen science / TLS research
             var sectorResolved = sectorStr
             if (points.isEmpty() && pureCandidate != null) {
                 points.addAll(pureTicCatalogRepo.synthesizePhotometricSeries(pureCandidate))
@@ -262,20 +301,12 @@ class XilonRepository @Inject constructor(
                 if (dvTperiod == null) dvTperiod = pureCandidate.estimatedPeriodDays
             }
 
-            // 5. Scientifically Rigorous Period Determination:
-            // Priority 1: User explicitly entered period
-            // Priority 2: Peer-reviewed literature period from pscomppars (e.g. WASP-126 b = 3.288 d)
-            // Priority 3: Pure TIC candidate estimated period
-            // Priority 4: NASA TOI archival candidate period (e.g. TOI-1895.01 = 748.07 d)
-            // Priority 5: MAST SPOC DV Header TPERIOD
-            // Priority 6: Fallback default
             val period = targetPeriodDays
                 ?: archivalCrossMatch.literaturePeriodDays
                 ?: pureCandidate?.estimatedPeriodDays
                 ?: dvTperiod
                 ?: 10.0
 
-            // 6. Run the XILON mathematical detection engine
             val result = xilonTransitDetector.analyzePhotometricTimeSeries(
                 rawPoints = points,
                 star = starProps,
@@ -288,7 +319,8 @@ class XilonRepository @Inject constructor(
                 dvSnr = dvTsnr ?: (if (pureCandidate != null) 9.8 else null)
             )
 
-            Result.success(result)
+            val finalResult = result.copy(sector = sanitizeSectorForResult(result))
+            Result.success(finalResult)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -297,13 +329,11 @@ class XilonRepository @Inject constructor(
     }
 
     suspend fun crossMatchArchivalDatabases(cleanTic: String): ArchivalCrossMatch = withContext(Dispatchers.IO) {
-        // Step 1: Check NASA Confirmed Planets (pscomppars)
         try {
-            val queryConfirmed = "SELECT pl_name,hostname,tic_id,disc_year,disc_facility,pl_orbper,pl_trandur,pl_trandep,pl_rade,pl_bmasse,pl_eqt FROM pscomppars WHERE tic_id='TIC $cleanTic' OR tic_id='$cleanTic'"
+            val queryConfirmed = "SELECT pl_name,hostname,tic_id,disc_year,disc_facility,pl_orbper,pl_trandur,pl_trandep,pl_rade,pl_bmasse,pl_eqt FROM pscomppars WHERE tic_id='TIC $cleanTic' OR tic_id=$cleanTic"
             val confirmedList = exoplanetArchiveApi.queryConfirmedTable(queryConfirmed)
             if (confirmedList.isNotEmpty()) {
                 val p = confirmedList[0]
-                // pl_trandep in pscomppars is percentage (e.g. 0.7005% -> 7005 ppm)
                 val depthPpm = p.plTranDep?.let { it * 10000.0 }
                 return@withContext ArchivalCrossMatch(
                     status = ArchivalCatalogStatus.CONFIRMED_PLANET_VALIDATION,
@@ -321,10 +351,8 @@ class XilonRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Ignore network or table query error and proceed to TOI check
         }
 
-        // Step 2: Check NASA TESS Objects of Interest (toi)
         try {
             val queryToi = "SELECT toi,tid,tfopwg_disp,pl_orbper,pl_trandurh,pl_trandep,pl_rade,pl_eqt FROM toi WHERE tid=$cleanTic"
             val toiList = exoplanetArchiveApi.queryToiTable(queryToi)
@@ -338,7 +366,7 @@ class XilonRepository @Inject constructor(
                     discoveryFacility = "TESS",
                     literaturePeriodDays = t.plOrbPer,
                     literatureDurationHours = t.plTranDurH,
-                    literatureDepthPpm = t.plTranDep, // in toi, pl_trandep is already ppm
+                    literatureDepthPpm = t.plTranDep,
                     literatureRadiusEarth = t.plRadE,
                     isBenchmarkTarget = false
                 )
@@ -346,10 +374,8 @@ class XilonRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Ignore
         }
 
-        // Step 3: Check if it is a curated Pure TIC Candidate (Planet Hunters / TLS / Blindspots)
         val pureCand = pureTicCatalogRepo.getCandidateByTic(cleanTic)
         if (pureCand != null) {
             return@withContext ArchivalCrossMatch(
@@ -366,7 +392,6 @@ class XilonRepository @Inject constructor(
             )
         }
 
-        // Step 4: Unrecorded in both confirmed and TOI candidates
         ArchivalCrossMatch(
             status = ArchivalCatalogStatus.POTENTIAL_NEW_SIGNAL,
             canonicalName = "TIC $cleanTic",
