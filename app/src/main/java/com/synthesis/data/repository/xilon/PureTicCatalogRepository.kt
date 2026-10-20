@@ -54,14 +54,14 @@ class PureTicCatalogRepository @Inject constructor(
             potentialPlanetaryType = "Jovian / Gas Giant (6.34 R⊕, 28.18 M⊕)",
             isInHabitableZone = false,
             scientificPriority = "CANDIDAT VIRGIN • CTOI READY (SNR 9.80σ)",
-            scientificNotes = "Adâncime 1600 ppm (1.6 ppt), SNR 9.80σ, Simetrie 0.598σ (<4.0σ = Planetă Simetrică), Eclipsă secundară 0.0 ppm. Rază 6.336 R⊕, Densitate 0.611 g/cm³, Tem[...]
+            scientificNotes = "Adâncime 1600 ppm (1.6 ppt), SNR 9.80σ, Simetrie 0.598σ (<4.0σ = Planetă Simetrică), Eclipsă secundară 0.0 ppm. Rază 6.336 R⊕, Densitate 0.611 g/cm³, Temperatură stellară 5780 K.",
             snrSigma = 9.80,
             profileSymmetryDeltaSigma = 0.598
         ),
         PureTicCandidate(
             ticId = "167418703",
             name = "TIC 167418703 (Candidat Virgin • Fără TOI)",
-            sector = "Sector 1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9 / 10 / 11 / 12 / 13 / 27 / 28 / 29 / 30 / 31 / 32 / 33 (s0001 / s0002 / s0003 / s0004 / s0005 / s0006 / s0007 / s0008 / s0009 / s0010[...]
+            sector = "Sector 1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9 / 10 / 11 / 12 / 13 / 27 / 28 / 29 / 30 / 31 / 32 / 33 (s0001 / s0002 / s0003 / s0004 / s0005 / s0006 / s0007 / s0008 / s0009 / s0010 / s0011 / s0012 / s0013 / s0027 / s0028 / s0029 / s0030 / s0031 / s0032 / s0033)",
             apparentMag = 16.695,
             estimatedPeriodDays = 5.60,
             transitDurationHours = 3.2,
@@ -281,7 +281,7 @@ class PureTicCatalogRepository @Inject constructor(
             targetType = "Pure TIC Candidate (Fără TOI)",
             knownClassification = "Neînregistrată NASA (Teren Virgin)",
             advisoryPriority = c.scientificPriority,
-            scientificReason = "${c.potentialPlanetaryType} | Adâncime: ${c.transitDepthPpm.toInt()} ppm, P: ${c.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.2f", it)} d" } ?: "n/a"}, SNR: ${String.format(Locale.US, "%.1f", c.snrSigma)}σ",
+            scientificReason = "${c.potentialPlanetaryType} | Adâncime: ${c.transitDepthPpm.toInt()} ppm, P: ${c.estimatedPeriodDays?.let { "${String.format(Locale.US, "%.2f", it)} d" } ?: "n/a"}, SNR ${String.format(Locale.US, "%.2f", c.snrSigma)}σ",
             raDeg = 0.0,
             decDeg = 0.0,
             sourceCatalog = "PURE_TIC"
