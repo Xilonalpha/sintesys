@@ -10,6 +10,22 @@ android {
     namespace = "com.synthesis"
     compileSdk = 36
 
+    signingConfigs {
+        create("release") {
+            val storeFilePath = System.getenv("RELEASE_STORE_FILE")
+            val storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+            val keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+            val keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+
+            if (!storeFilePath.isNullOrBlank()) {
+                storeFile = file(storeFilePath)
+                this.storePassword = storePassword ?: ""
+                this.keyAlias = keyAlias ?: ""
+                this.keyPassword = keyPassword ?: ""
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.syntesys"
         minSdk = 26
@@ -29,9 +45,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
